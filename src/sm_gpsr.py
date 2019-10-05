@@ -17,7 +17,7 @@ import smach
 import smach_ros
 from std_msgs.msg import String
 
-sys.path.append(roslib.packages.get_pkg_dir('common_pkg') + '/scripts')
+sys.path.append(roslib.packages.get_pkg_dir('mimi_common_pkg') + '/scripts')
 from common_function import *
 from common_action_client import detectDoorOpenAC
 
@@ -136,6 +136,7 @@ class Act(smach.State):
             return 'all_act_success'
 
 def main():
+    speak('start GPSR')
     sm = smach.StateMachine(outcomes=['finish_gpsr'])
     sm.userdata.current_posi = 'Null'
     with sm:
