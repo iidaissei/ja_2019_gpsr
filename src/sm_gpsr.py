@@ -17,7 +17,7 @@ import smach
 
 sys.path.insert(0, '/home/athome/catkin_ws/src/mimi_common_pkg/scripts')
 from common_action_client import approachPersonAC, enterTheRoomAC
-from common_function import *
+from common_function import speak, searchLocationName
 
 
 class Admission(smach.State):
@@ -36,6 +36,7 @@ class Admission(smach.State):
             rospy.loginfo('**Interrupted**')
             pass
 
+
 class MoveToOperator(smach.State):
     def __init__(self):
         smach.State.__init__(
@@ -47,7 +48,9 @@ class MoveToOperator(smach.State):
             rospy.loginfo('Executing state: MOVE_TO_OPERATOR')
             coordinate_list = searchLocationName('operator')
             print coordinate_list
-            #result = navigationAC(coordinate_list)
+            navigationAC(coordinate_list)
+            speak('I arrived operator position')
+            rospy.sleep(2.0)
             return 'arrived'
         except rospy.ROSInterruptException:
             rospy.loginfo('**Interrupted**')
@@ -172,7 +175,7 @@ class ExeAction(smach.State):
             self.action_list = userdata.exe_action_in
             rospy.loginfo('Action name: ' + self.action_list[0])
             if self.action_list[0] == 'go':
-                result = navigationAC()
+                result = navigationAC(self.action_list[1])
         except rospy.ROSInterruptException:
             rospy.loginfo('**Interrupted**')
 
@@ -191,6 +194,16 @@ def main():
                 'MOVE_TO_OPERATOR',
                 MoveToOperator(),
                 transitions = {'arrived':'LISTEN_ORDER'})
+
+        smach.StateMachine.add(
+                'MOVE',
+                Move(),
+                transitions = {'arrived':'LISTEN_ORDER'})
+
+        smach.StateMachine.add(
+                'MANIPULATION',
+                Manipulation(),
+                transitions = {'mani_success':'EXE_ACTION'})
 
         #現在位置とオーダー数を確認するState
         sm_check = smach.Concurrence(
