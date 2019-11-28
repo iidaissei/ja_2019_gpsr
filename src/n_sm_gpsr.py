@@ -12,11 +12,11 @@ import sys
 # ROS
 import rospy
 from std_msgs.msg import String
-from mimi_common_pkg.srv import ManiulationSrv
+from mimi_common_pkg.srv import ManipulateSrv
 import smach_ros
 import smach
 
-sys.path.insert(0, '/home/issei/catkin_ws/src/mimi_common_pkg/scripts/')
+sys.path.insert(0, '/home/athome/catkin_ws/src/mimi_common_pkg/scripts/')
 from common_action_client import *
 from common_function import *
 
@@ -30,7 +30,7 @@ class Admission(smach.State):
     def execute(self, userdata):
         try:
             rospy.loginfo('Executing state: ADMISSION')
-            #enterTheRoomAC()
+            #enterTheRoomAC(0.8)
             rospy.loginfo('Admission completed!')
             return 'finish_admissiion'
         except rospy.ROSInterruptException:
@@ -43,14 +43,13 @@ class MoveToOperator(smach.State):
         smach.State.__init__(
                 self,
                 outcomes = ['arrived'])
-        # Set Operator Position
-        #self.coordinate_list = searchLocationName('operator')
 
     def execute(self, userdata):
         try:
             rospy.loginfo('Executing state: MOVE_TO_OPERATOR')
-            #navigationAC(self.coordinate_list)
-            #speak('I arrived operator position')
+            coordinate_list = searchLocationName('operator')
+            navigationAC(coordinate_list)
+            speak('I arrived operator position')
             return 'arrived'
         except rospy.ROSInterruptException:
             rospy.loginfo('**Interrupted**')
@@ -67,12 +66,15 @@ class ListenOrder(smach.State):
                 output_keys = ['order_out'])
         #Value
         self.listen_count = 1
-        self.result = [['go', 'shelf'],['grasp', 'none'],['go','operator'],['speak']]
+        self.result = []
         
     def execute(self, userdata):
         try:
             rospy.loginfo('Executing state: LISTEN_ORDER')
             #self.result = ActionPlan.execute()
+            speak('Please give me a order')
+            rospy.sleep(2.0)
+            self.result = [['grasp','cup'],['speak', 'See you rater']]
             if self.listen_count <= 3:
                 if self.result == 'failure':
                     rospy.loginfo('Listening Failed')
@@ -112,6 +114,7 @@ class ExecuteAction(smach.State):
         try:
             rospy.loginfo('Executing state: EXECUTE_ACTION')
             self.action_list = userdata.order_in
+            print self.action_list
             if self.action_count < len(self.action_list):
                 rospy.loginfo('ActionCount: ' + str(self.action_count + 1))
                 action = self.action_list[self.action_count][0]
@@ -119,14 +122,14 @@ class ExecuteAction(smach.State):
                 self.action_count += 1
                 if action is 'go':
                     return 'go'
-                elif action is 'grasp' or 'place' or 'give':
-                    return 'mani'
                 elif action is 'search':
                     return 'search'
                 elif action is 'speak':
                     return 'speak'
+                elif action is 'grasp':
+                    return 'mani'
                 else:
-                    print 'fuck'
+                    speak('nani siten nen')
             else:
                 rospy.loginfo('All action completed')
                 self.action_count = 0
@@ -219,25 +222,23 @@ class Manipulation(smach.State):
                             'mani_failure'],
                 input_keys = ['mani_in'])
         #Service
-        self.mani_srv = rospy.ServiceProxy('/manipulation', ManiulationSrv)
-        self.obj = ManiulationSrv()
+        self.mani_srv = rospy.ServiceProxy('/manipulation', ManipulateSrv)
+        self.obj = ManipulateSrv()
         #Publisher
-        self.pub_give_req = rospy.Publisher()
-        self.pub_place_req = rospy.Publisher()
+        #self.pub_give_req = rospy.Publisher()
+        #self.pub_place_req = rospy.Publisher()
 
     def execute(self, userdata):
         try:
             rospy.loginfo('Executing state: MANIPULATION')
-            if userdata.mani_in == 'grasp':
-                slef.obj.target = userdata.mani_in
-                result = mani_success(self.obj)
-                result = mani_srv(self.obj)
-                if result.result == True:
-                    rospy.loginfo('Manipulation success')
-                    return 'mani_success'
-                else:
-                    rospy.loginfo('Manipulation failed')
-                    return 'mani_failure'
+            self.obj.target = userdata.mani_in
+            result = self.mani_srv(self.obj.target)
+            if result.result == True:
+                rospy.loginfo('Manipulation success')
+                return 'mani_success'
+            else:
+                rospy.loginfo('Manipulation failed')
+                return 'mani_failure'
         except rospy.ROSInterruptException:
             rospy.loginfo('**Interrupted**')
             pass
@@ -389,17 +390,17 @@ def main():
                 remapping = {'mani_in':'action_data'})
 
         smach.StateMachine.add(
+                'SPEAK',
+                Speak(),
+                transitions = {'speak_success':'EXECUTE_ACTION'},
+                remapping = {'speak_in':'action_data'})
+
+        smach.StateMachine.add(
                 'SEARCH',
                 Search(),
                 transitions = {'search_success':'EXECUTE_ACTION',
                                'search_failure':'CHECK'},
                 remapping = {'search_in':'action_data'})
-
-        smach.StateMachine.add(
-                'SPEAK',
-                Speak(),
-                transitions = {'speak_success':'EXECUTE_ACTION'},
-                remapping = {'speak_in':'action_data'})
 
         smach.StateMachine.add(
                 'EXIT',
