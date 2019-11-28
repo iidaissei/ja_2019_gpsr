@@ -12,12 +12,13 @@ import sys
 # ROS
 import rospy
 from std_msgs.msg import String
+from mimi_common_pkg.srv import ManiulationSrv
 import smach_ros
 import smach
 
-#sys.path.insert(0, '/home/issei/catkin_ws/src/mimi_common_pkg/scripts/')
-#from common_action_client import *
-#from common_function import *
+sys.path.insert(0, '/home/issei/catkin_ws/src/mimi_common_pkg/scripts/')
+from common_action_client import *
+from common_function import *
 
 
 class Admission(smach.State):
@@ -66,7 +67,7 @@ class ListenOrder(smach.State):
                 output_keys = ['order_out'])
         #Value
         self.listen_count = 1
-        self.result = [['go'],['grasp'],['go'],['give'],['search'],['speak']]
+        self.result = [['go', 'shelf'],['grasp', 'none'],['go','operator'],['speak']]
         
     def execute(self, userdata):
         try:
@@ -102,7 +103,8 @@ class ExecuteAction(smach.State):
                             'action_complete'],
                 input_keys = ['order_in',
                               'e_position_in'],
-                output_keys = ['e_position_out'])
+                output_keys = ['e_position_out',
+                               'e_data_out'])
         self.action_list = []
         self.action_count = 0
 
@@ -113,6 +115,7 @@ class ExecuteAction(smach.State):
             if self.action_count < len(self.action_list):
                 rospy.loginfo('ActionCount: ' + str(self.action_count + 1))
                 action = self.action_list[self.action_count][0]
+                userdata.e_data_out = self.action_list[self.action_count][1]
                 self.action_count += 1
                 if action is 'go':
                     return 'go'
@@ -193,8 +196,8 @@ class Move(smach.State):
     def execute(self, userdata):
         try:
             rospy.loginfo('Executing state: MOVE')
-            #coord_list = searchLocationName(userdata.position_in)
-            #result = navigationAC(coord_list)
+            coord_list = searchLocationName(userdata.position_in)
+            result = navigationAC(coord_list)
             result = 'success'
             if result == 'success':
                 rospy.loginfo('Navigation success')
@@ -215,17 +218,26 @@ class Manipulation(smach.State):
                 outcomes = ['mani_success',
                             'mani_failure'],
                 input_keys = ['mani_in'])
+        #Service
+        self.mani_srv = rospy.ServiceProxy('/manipulation', ManiulationSrv)
+        self.obj = ManiulationSrv()
+        #Publisher
+        self.pub_give_req = rospy.Publisher()
+        self.pub_place_req = rospy.Publisher()
 
     def execute(self, userdata):
         try:
             rospy.loginfo('Executing state: MANIPULATION')
-            result = 'success'
-            if result == 'success':
-                rospy.loginfo('Manipulation success')
-                return 'mani_success'
-            else:
-                rospy.loginfo('Manipulation failed')
-                return 'mani_failure'
+            if userdata.mani_in == 'grasp':
+                slef.obj.target = userdata.mani_in
+                result = mani_success(self.obj)
+                result = mani_srv(self.obj)
+                if result.result == True:
+                    rospy.loginfo('Manipulation success')
+                    return 'mani_success'
+                else:
+                    rospy.loginfo('Manipulation failed')
+                    return 'mani_failure'
         except rospy.ROSInterruptException:
             rospy.loginfo('**Interrupted**')
             pass
@@ -265,8 +277,8 @@ class Speak(smach.State):
     def execute(self, userdata):
         try:
             rospy.loginfo('Executing state: SPEAK')
-            #speak(userdata.speak_in)
-            #rospy.sleep(2.0)
+            speak(userdata.speak_in)
+            rospy.sleep(2.0)
             result = 'success'
             rospy.loginfo('Speak success')
             return 'speak_success'
@@ -284,7 +296,7 @@ class Exit(smach.State):
     def execute(self, userdata):
         try:
             rospy.loginfo('Executing state: EXIT')
-            coord_list = searchLocationName('exit')
+            coord_list = searchLocationName('entrance')
             result = navigationAC(coord_list)
             rospy.loginfo('Exit success')
             return 'exit'
@@ -327,7 +339,8 @@ def main():
                                'action_complete':'CHECK'},
                 remapping = {'order_in':'order',
                              'e_position_in':'position',
-                             'e_position_out':'position'})
+                             'e_position_out':'position',
+                             'e_data_out':'action_data'})
 
         # 現在位置確認とオーダーカウントを行うState
         sm_check = smach.Concurrence(
@@ -365,7 +378,7 @@ def main():
                 Move(),
                 transitions = {'navi_success':'EXECUTE_ACTION',
                                'navi_failure':'CHECK'},
-                remapping = {'position_in':'position',
+                remapping = {'position_in':'action_data',
                              'position_out':'position'})
 
         smach.StateMachine.add(
@@ -373,20 +386,20 @@ def main():
                 Manipulation(),
                 transitions = {'mani_success':'EXECUTE_ACTION',
                                'mani_failure':'CHECK'},
-                remapping = {'mani_in':'m_object'})
+                remapping = {'mani_in':'action_data'})
 
         smach.StateMachine.add(
                 'SEARCH',
                 Search(),
                 transitions = {'search_success':'EXECUTE_ACTION',
                                'search_failure':'CHECK'},
-                remapping = {'search_in':'s_object'})
+                remapping = {'search_in':'action_data'})
 
         smach.StateMachine.add(
                 'SPEAK',
                 Speak(),
                 transitions = {'speak_success':'EXECUTE_ACTION'},
-                remapping = {'speak_in':'sentence'})
+                remapping = {'speak_in':'action_data'})
 
         smach.StateMachine.add(
                 'EXIT',
