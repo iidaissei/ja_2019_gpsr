@@ -218,11 +218,14 @@ class Move(smach.State):
                             'navi_failure'],
                 input_keys = ['position_in'],
                 output_keys = ['position_out'])
+        #Publisher
+        self.pub_location = rospy.Publisher('/navigation/move_place', String, queue_size = 1)
 
     def execute(self, userdata):
         try:
             rospy.loginfo('Executing state: MOVE')
             coord_list = searchLocationName(userdata.position_in[1])
+            self.pub_location.publish(userdata.position_in[1])
             result = navigationAC(coord_list)
             result = 'success'
             if result == 'success':
@@ -244,14 +247,12 @@ class Manipulation(smach.State):
                 outcomes = ['mani_success',
                             'mani_failure'],
                 input_keys = ['action_in',
-                              'data_in',
-                              'locate_data'])
+                              'data_in'])
         # Service
         self.mani_srv = rospy.ServiceProxy('/manipulation', ManipulateSrv)
         self.obj = ManipulateSrv()
         # Publisher
         self.pub_arm_req = rospy.Publisher('/arm/changing_pose_req', String, queue_size = 1)
-        self.pub_location = rospy.Publisher('/navigation/move_place', String, queue_size = 1)
         # Subscriber
         self.sub_arm_res = rospy.Subscriber('/arm/changing_pose_res', Bool, self.armChangeCB)
         # Value
@@ -264,7 +265,6 @@ class Manipulation(smach.State):
         try:
             rospy.loginfo('Executing state: MANIPULATION')
             rospy.loginfo('Start action: ' + userdata.action_in)
-            self.pub_location.publish(userdata.locate_data)
             if userdata.action_in == 'grasp':
                 self.obj.target = userdata.data_in[2]
                 result = self.mani_srv(self.obj.target)
@@ -432,8 +432,7 @@ def main():
                 transitions = {'mani_success':'EXECUTE_ACTION',
                                'mani_failure':'CHECK'},
                 remapping = {'data_in':'action_data',
-                             'action_in':'action_name',
-                             'locate_data':'position'})
+                             'action_in':'action_name'})
 
         smach.StateMachine.add(
                 'SPEAK',
