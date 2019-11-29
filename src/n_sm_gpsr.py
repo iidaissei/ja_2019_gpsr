@@ -106,6 +106,7 @@ class ExecuteAction(smach.State):
                 input_keys = ['order_in',
                               'e_position_in'],
                 output_keys = ['e_position_out',
+                               'e_action_out',
                                'e_data_out'])
         self.action_list = []
         self.action_count = 0
@@ -126,7 +127,8 @@ class ExecuteAction(smach.State):
                     return 'search'
                 elif action is 'speak':
                     return 'speak'
-                elif action is 'grasp':
+                elif action is 'grasp' or 'place' or 'give':
+                    userdata.e_action_out = action
                     return 'mani'
                 else:
                     speak('nani siten nen')
@@ -220,25 +222,41 @@ class Manipulation(smach.State):
                 self,
                 outcomes = ['mani_success',
                             'mani_failure'],
-                input_keys = ['mani_in'])
+                input_keys = ['action_in',
+                              'data_in'])
         #Service
         self.mani_srv = rospy.ServiceProxy('/manipulation', ManipulateSrv)
         self.obj = ManipulateSrv()
         #Publisher
-        #self.pub_give_req = rospy.Publisher()
-        #self.pub_place_req = rospy.Publisher()
+        self.pub_arm_req = rospy.Publisher('/arm/changing_pose_req', String, queue_size = 1)
+        #Subscriber
+        self.sub_arm_res = rospy.Subscriber('/arm/changing_pose_res', Bool, self.armChangeCB)
+        #Value
+        self.arm_result = False
+
+    def armChangeCB(self, receive_msg):
+        self.arm_result = receive_msg.data
 
     def execute(self, userdata):
         try:
             rospy.loginfo('Executing state: MANIPULATION')
-            self.obj.target = userdata.mani_in
-            result = self.mani_srv(self.obj.target)
-            if result.result == True:
-                rospy.loginfo('Manipulation success')
-                return 'mani_success'
+            rospy.loginfo('Start action: ' + userdata.action_in)
+            if userdata.action_in == 'grasp':
+                self.obj.target = userdata.data_in
+                result = self.mani_srv(self.obj.target)
+                if result.result == True:
+                    rospy.loginfo('Manipulation success')
+                    return 'mani_success'
+                else:
+                    rospy.loginfo('Manipulation failed')
+                    return 'mani_failure'
             else:
-                rospy.loginfo('Manipulation failed')
-                return 'mani_failure'
+                self.pub_arm_req.publish(userdata.action_in)
+                self.arm_result = False
+                while not rospy.is_shutdown() and self.arm_result == False:
+                    rospy.loginfo('Waiting for arm_result')
+                    rospy.sleep(1.0)
+                return 'mani_success'
         except rospy.ROSInterruptException:
             rospy.loginfo('**Interrupted**')
             pass
@@ -341,6 +359,7 @@ def main():
                 remapping = {'order_in':'order',
                              'e_position_in':'position',
                              'e_position_out':'position',
+                             'e_action_out':'action_name',
                              'e_data_out':'action_data'})
 
         # 現在位置確認とオーダーカウントを行うState
@@ -387,7 +406,8 @@ def main():
                 Manipulation(),
                 transitions = {'mani_success':'EXECUTE_ACTION',
                                'mani_failure':'CHECK'},
-                remapping = {'mani_in':'action_data'})
+                remapping = {'data_in':'action_data',
+                             'action_in':'action_name'})
 
         smach.StateMachine.add(
                 'SPEAK',
