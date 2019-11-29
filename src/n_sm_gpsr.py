@@ -11,7 +11,7 @@
 import sys
 # ROS
 import rospy
-from std_msgs.msg import String
+from std_msgs.msg import String, Bool
 from mimi_common_pkg.srv import ManipulateSrv
 import smach_ros
 import smach
@@ -74,10 +74,12 @@ class ListenOrder(smach.State):
             #self.result = ActionPlan.execute()
             speak('Please give me a order')
             rospy.sleep(2.0)
-            self.result = [['grasp','cup'],['speak', 'See you rater']]
+            self.result = [['go', 'shelf'],['search', 'person']]
             if self.listen_count <= 3:
                 if self.result == 'failure':
                     rospy.loginfo('Listening Failed')
+                    speak('One more time Please')
+                    rospy.sleep(0.1)
                     self.listen_count += 1
                     return 'listen_failure'
                 else:
