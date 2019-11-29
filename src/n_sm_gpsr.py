@@ -13,6 +13,8 @@ import sys
 import rospy
 from std_msgs.msg import String, Bool
 from mimi_common_pkg.srv import ManipulateSrv
+from std_srvs.srv import Trigger
+from ti_gpsr.msg import array
 import smach_ros
 import smach
 
@@ -60,53 +62,54 @@ class ListenOrder(smach.State):
     def __init__(self):
         smach.State.__init__(
                 self,
-                outcomes = ['listen_success',
-                            'listen_failure',
-                            'next_order'],
+                outcomes = ['listen_success'
+                            #'listen_failure',
+                            #'next_order'
+                            ],
                 output_keys = ['order_out'])
         # Publisher
         self.pub_API = rospy.Publisher('/gpsrface', Bool, queue_size = 1)
-        # Subscriber
-        self.sub_cmd == rospy.Subscriber('/command_list', arr)
+        # ServiceProxy
+        self.deki_srs = rospy.ServiceProxy('/deki_masu', Trigger)
         # Value
         self.listen_count = 1
-        self.result = []
+        self.plan_1 = [['go','desk'],['grasp','cup'],['go','operator'],['give']]
+        self.plan_2 = [['go','cupboard'],['grasp','cup'],['go','desk'],['place']]
+        self.plan_3 = [['go','shelf'],['grasp','cup'],['go','operator'],['give']]
 
-    def cmdCB(self, receive_msg):
-        self.result = receive_msg.msg
-        
     def execute(self, userdata):
         try:
             rospy.loginfo('Executing state: LISTEN_ORDER')
             speak('Please give me a order')
             rospy.sleep(2.0)
-<<<<<<< HEAD
             self.pub_API.publish(True)
-            while not rospy.is_shutdown() and self.result == []:
-                rospy.loginfo('Waiting for action plan')
-                rospy.sleep(1.0)
+            result = self.deki_srs()
             self.pub_API.publish(False)
-            self.result = [['grasp','cup'],['speak', 'See you rater']]
-=======
-            self.result = [['go', 'shelf'],['search', 'person']]
->>>>>>> 7b5af594be69275d1e19388845a037178cc78ed5
-            if self.listen_count <= 3:
-                if self.result == 'failure':
-                    rospy.loginfo('Listening Failed')
-                    speak('One more time Please')
-                    rospy.sleep(0.1)
-                    self.listen_count += 1
-                    return 'listen_failure'
-                else:
-                    rospy.loginfo('Listening Success')
-                    userdata.order_out = self.result
-                    self.result = []
-                    self.listen_count = 1
-                    return 'listen_success'
-            else:
-                rospy.loginfo('Move to next order')
-                self.result = []
-                return 'next_order'
+            print result
+            if result == '1':
+                userdata.order_out = self.plan_1
+            elif result == '2':
+                userdata.order_out = self.plan_2
+            elif result == '3':
+                userdata.order_out = self.plan_3
+            return 'listen_success'
+            #if self.listen_count <= 3:
+            #    if self.result == 'failure':
+            #        rospy.loginfo('Listening Failed')
+            #        speak('One more time Please')
+            #        rospy.sleep(0.1)
+            #        self.listen_count += 1
+            #        return 'listen_failure'
+            #    else:
+            #        rospy.loginfo('Listening Success')
+            #        userdata.order_out = self.result
+            #        self.result = []
+            #        self.listen_count = 1
+            #        return 'listen_success'
+            #else:
+            #    rospy.loginfo('Move to next order')
+            #    self.result = []
+            #    return 'next_order'
         except rospy.ROSInterruptException:
             rospy.loginfo('**Interrupted**')
             pass
@@ -126,17 +129,17 @@ class ExecuteAction(smach.State):
                 output_keys = ['e_position_out',
                                'e_action_out',
                                'e_data_out'])
-        self.action_list = []
+        self.order_data = []
         self.action_count = 0
 
     def execute(self, userdata):
         try:
             rospy.loginfo('Executing state: EXECUTE_ACTION')
-            self.action_list = userdata.order_in
+            self.order_data = userdata.order_in
             print self.action_list
             if self.action_count < len(self.action_list):
                 rospy.loginfo('ActionCount: ' + str(self.action_count + 1))
-                action = self.action_list[self.action_count][0]
+                action = self.order_data[self.action_count]
                 userdata.e_data_out = self.action_list[self.action_count]
                 self.action_count += 1
                 if action is 'go':
@@ -241,12 +244,14 @@ class Manipulation(smach.State):
                 outcomes = ['mani_success',
                             'mani_failure'],
                 input_keys = ['action_in',
-                              'data_in'])
+                              'data_in',
+                              'locate_data'])
         # Service
         self.mani_srv = rospy.ServiceProxy('/manipulation', ManipulateSrv)
         self.obj = ManipulateSrv()
         # Publisher
         self.pub_arm_req = rospy.Publisher('/arm/changing_pose_req', String, queue_size = 1)
+        self.pub_location = rospy.Publisher('/navigation/move_place', String, queue_size = 1)
         # Subscriber
         self.sub_arm_res = rospy.Subscriber('/arm/changing_pose_res', Bool, self.armChangeCB)
         # Value
@@ -259,6 +264,7 @@ class Manipulation(smach.State):
         try:
             rospy.loginfo('Executing state: MANIPULATION')
             rospy.loginfo('Start action: ' + userdata.action_in)
+            self.pub_location.publish(userdata.locate_data)
             if userdata.action_in == 'grasp':
                 self.obj.target = userdata.data_in[2]
                 result = self.mani_srv(self.obj.target)
@@ -362,8 +368,9 @@ def main():
                 'LISTEN_ORDER',
                 ListenOrder(),
                 transitions = {'listen_success':'EXECUTE_ACTION',
-                               'listen_failure':'LISTEN_ORDER',
-                               'next_order':'CHECK'},
+                               #'listen_failure':'LISTEN_ORDER',
+                               #'next_order':'CHECK'
+                               },
                 remapping = {'order_out':'order'})
 
         smach.StateMachine.add(
@@ -425,7 +432,8 @@ def main():
                 transitions = {'mani_success':'EXECUTE_ACTION',
                                'mani_failure':'CHECK'},
                 remapping = {'data_in':'action_data',
-                             'action_in':'action_name'})
+                             'action_in':'action_name',
+                             'locate_data':'position'})
 
         smach.StateMachine.add(
                 'SPEAK',
