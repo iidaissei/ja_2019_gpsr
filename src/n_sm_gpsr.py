@@ -11,7 +11,7 @@
 import sys
 # ROS
 import rospy
-from std_msgs.msg import String
+from std_msgs.msg import String, Bool
 from mimi_common_pkg.srv import ManipulateSrv
 import smach_ros
 import smach
@@ -64,16 +64,27 @@ class ListenOrder(smach.State):
                             'listen_failure',
                             'next_order'],
                 output_keys = ['order_out'])
-        #Value
+        # Publisher
+        self.pub_API = rospy.Publisher('/gpsrface', Bool, queue_size = 1)
+        # Subscriber
+        self.sub_cmd == rospy.Subscriber('/command_list', arr)
+        # Value
         self.listen_count = 1
         self.result = []
+
+    def cmdCB(self, receive_msg):
+        self.result = receive_msg.msg
         
     def execute(self, userdata):
         try:
             rospy.loginfo('Executing state: LISTEN_ORDER')
-            #self.result = ActionPlan.execute()
             speak('Please give me a order')
             rospy.sleep(2.0)
+            self.pub_API.publish(True)
+            while not rospy.is_shutdown() and self.result == []:
+                rospy.loginfo('Waiting for action plan')
+                rospy.sleep(1.0)
+            self.pub_API.publish(False)
             self.result = [['grasp','cup'],['speak', 'See you rater']]
             if self.listen_count <= 3:
                 if self.result == 'failure':
@@ -88,6 +99,7 @@ class ListenOrder(smach.State):
                     return 'listen_success'
             else:
                 rospy.loginfo('Move to next order')
+                self.result = []
                 return 'next_order'
         except rospy.ROSInterruptException:
             rospy.loginfo('**Interrupted**')
@@ -119,7 +131,7 @@ class ExecuteAction(smach.State):
             if self.action_count < len(self.action_list):
                 rospy.loginfo('ActionCount: ' + str(self.action_count + 1))
                 action = self.action_list[self.action_count][0]
-                userdata.e_data_out = self.action_list[self.action_count][1]
+                userdata.e_data_out = self.action_list[self.action_count]
                 self.action_count += 1
                 if action is 'go':
                     return 'go'
@@ -201,7 +213,7 @@ class Move(smach.State):
     def execute(self, userdata):
         try:
             rospy.loginfo('Executing state: MOVE')
-            coord_list = searchLocationName(userdata.position_in)
+            coord_list = searchLocationName(userdata.position_in[1])
             result = navigationAC(coord_list)
             result = 'success'
             if result == 'success':
@@ -224,14 +236,14 @@ class Manipulation(smach.State):
                             'mani_failure'],
                 input_keys = ['action_in',
                               'data_in'])
-        #Service
+        # Service
         self.mani_srv = rospy.ServiceProxy('/manipulation', ManipulateSrv)
         self.obj = ManipulateSrv()
-        #Publisher
+        # Publisher
         self.pub_arm_req = rospy.Publisher('/arm/changing_pose_req', String, queue_size = 1)
-        #Subscriber
+        # Subscriber
         self.sub_arm_res = rospy.Subscriber('/arm/changing_pose_res', Bool, self.armChangeCB)
-        #Value
+        # Value
         self.arm_result = False
 
     def armChangeCB(self, receive_msg):
@@ -242,7 +254,7 @@ class Manipulation(smach.State):
             rospy.loginfo('Executing state: MANIPULATION')
             rospy.loginfo('Start action: ' + userdata.action_in)
             if userdata.action_in == 'grasp':
-                self.obj.target = userdata.data_in
+                self.obj.target = userdata.data_in[2]
                 result = self.mani_srv(self.obj.target)
                 if result.result == True:
                     rospy.loginfo('Manipulation success')
@@ -274,7 +286,7 @@ class Search(smach.State):
         try:
             rospy.loginfo('Executing state: SEARCH')
             # 人発見アクションを改造してここで使えるようにする
-            result = localizeObjectAC(userdata.search_in)
+            result = localizeObjectAC(userdata.search_in[2])
             if result == 'success':
                 rospy.loginfo('Search success')
                 return 'search_success'
