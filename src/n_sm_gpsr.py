@@ -274,7 +274,7 @@ class Search(smach.State):
         try:
             rospy.loginfo('Executing state: SEARCH')
             # 人発見アクションを改造してここで使えるようにする
-            result = 'success'
+            result = localizeObjectAC(userdata.search_in)
             if result == 'success':
                 rospy.loginfo('Search success')
                 return 'search_success'
