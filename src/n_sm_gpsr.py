@@ -80,15 +80,21 @@ class ListenOrder(smach.State):
             rospy.loginfo('Executing state: LISTEN_ORDER')
             speak('Please give me a order')
             rospy.sleep(2.0)
+<<<<<<< HEAD
             self.pub_API.publish(True)
             while not rospy.is_shutdown() and self.result == []:
                 rospy.loginfo('Waiting for action plan')
                 rospy.sleep(1.0)
             self.pub_API.publish(False)
             self.result = [['grasp','cup'],['speak', 'See you rater']]
+=======
+            self.result = [['go', 'shelf'],['search', 'person']]
+>>>>>>> 7b5af594be69275d1e19388845a037178cc78ed5
             if self.listen_count <= 3:
                 if self.result == 'failure':
                     rospy.loginfo('Listening Failed')
+                    speak('One more time Please')
+                    rospy.sleep(0.1)
                     self.listen_count += 1
                     return 'listen_failure'
                 else:
