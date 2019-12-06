@@ -142,11 +142,11 @@ class ExecuteAction(smach.State):
             rospy.loginfo('Executing state: EXECUTE_ACTION')
             self.plan = userdata.order_in
             print userdata.order_in
-            # 失敗した時のアクションカウントの初期化処理が不十分。とりま以下の処理で解決。
+            # 失敗した時のアクションカウントの初期化処理が不十分。とりま以下の処理で解決してない。
             if self.plan != userdata.order_in:
                 print 'New order start'
                 self.action_count = -1
-            if self.action_count < len(userdata.order_in)-1:
+            elif self.action_count < len(userdata.order_in)-1:
                 self.action_count += 1
                 rospy.loginfo('ActionCount: ' + str(self.action_count + 1))
                 userdata.e_action_out = userdata.order_in[self.action_count][0]
