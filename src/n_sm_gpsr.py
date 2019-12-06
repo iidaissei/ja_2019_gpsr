@@ -33,7 +33,7 @@ class Admission(smach.State):
         try:
             rospy.loginfo('Executing state: ADMISSION')
             speak('Start gpsr')
-            enterTheRoomAC(0.8)
+            #enterTheRoomAC(0.8)
             rospy.loginfo('Admission completed!')
             return 'finish_admissiion'
         except rospy.ROSInterruptException:
@@ -67,7 +67,8 @@ class ListenOrder(smach.State):
                             #'listen_failure',
                             #'next_order'
                             ],
-                output_keys = ['order_out'])
+                output_keys = ['order_out',
+                               'order_num_out'])
         # Publisher
         self.pub_API = rospy.Publisher('/gpsrface', Bool, queue_size = 1)
         # ServiceProxy
@@ -86,12 +87,15 @@ class ListenOrder(smach.State):
             print result
             while not rospy.is_shutdown():
                 if result.message == '1':
+                    userdata.order_num_out = 1
                     userdata.order_out = self.plan_1
                     break
                 elif result.message == '2':
+                    userdata.order_num_out =2 
                     userdata.order_out = self.plan_2
                     break
                 elif result.message == '3':
+                    userdata.order_num_out =3 
                     userdata.order_out = self.plan_3
                     break
                 else:
@@ -129,24 +133,25 @@ class ExecuteAction(smach.State):
                             'speak',
                             'action_complete'],
                 input_keys = ['order_in',
-                              'e_position_in'],
+                              'e_position_in',
+                              'order_num_in'],
                 output_keys = ['e_position_out',
                                'e_action_out',
                                'e_data_out'])
         self.order_data = []
         self.action_count = -1
-        self.plan = []
+        self.order_num = 1
 
     def execute(self, userdata):
         try:
             rospy.loginfo('Executing state: EXECUTE_ACTION')
             self.plan = userdata.order_in
-            print userdata.order_in
             # 失敗した時のアクションカウントの初期化処理が不十分。とりま以下の処理で解決してない。
-            if self.plan != userdata.order_in:
+            if userdata.order_num_in == self.order_num + 1:
                 print 'New order start'
                 self.action_count = -1
             elif self.action_count < len(userdata.order_in)-1:
+                self.order_num = userdata.order_num_in
                 self.action_count += 1
                 rospy.loginfo('ActionCount: ' + str(self.action_count + 1))
                 userdata.e_action_out = userdata.order_in[self.action_count][0]
@@ -217,7 +222,7 @@ class OrderCount(smach.State):
     def execute(self, userdata):
         try:
             rospy.loginfo('Executing state: ORDER_COUNT')
-            if self.order_count <= 1:
+            if self.order_count <= 3:
                 rospy.loginfo('Order num: ' + str(self.order_count))
                 self.order_count += 1
                 return 'not_complete'
@@ -357,8 +362,8 @@ class Exit(smach.State):
     def execute(self, userdata):
         try:
             rospy.loginfo('Executing state: EXIT')
-            coord_list = searchLocationName('entrance')
-            result = navigationAC(coord_list)
+            #coord_list = searchLocationName('entrance')
+            #result = navigationAC(coord_list)
             speak('Finsh gpsr')
             rospy.loginfo('Exit success')
             return 'exit'
@@ -392,7 +397,8 @@ def main():
                                #'listen_failure':'LISTEN_ORDER',
                                #'next_order':'CHECK'
                                },
-                remapping = {'order_out':'order'})
+                remapping = {'order_out':'order',
+                             'order_num_out':'order_num'})
 
         smach.StateMachine.add(
                 'EXECUTE_ACTION',
@@ -406,7 +412,8 @@ def main():
                              'e_position_in':'position',
                              'e_position_out':'position',
                              'e_action_out':'action_name',
-                             'e_data_out':'action_data'})
+                             'e_data_out':'action_data',
+                             'order_num_in':'order_num'})
 
         # 現在位置確認とオーダーカウントを行うState
         sm_check = smach.Concurrence(
