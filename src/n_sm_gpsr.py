@@ -104,8 +104,6 @@ class ListenOrder(smach.State):
             #if self.listen_count <= 3:
             #    if self.result == 'failure':
             #        rospy.loginfo('Listening Failed')
-            #        speak('One more time Please')
-            #        rospy.sleep(0.1)
             #        self.listen_count += 1
             #        return 'listen_failure'
             #    else:
