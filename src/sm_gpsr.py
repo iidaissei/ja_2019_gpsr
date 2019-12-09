@@ -162,6 +162,7 @@ class ExecuteAction(smach.State):
         # Value
         self.obj = ManipulateSrv()
         self.action_count = 0
+        self.order_data = []
 
     def selectAction(self, name, data):
         rospy.loginfo('Execute action: ' + name)
@@ -191,13 +192,16 @@ class ExecuteAction(smach.State):
             rospy.loginfo('Executing state: EXECUTE_ACTION')
             if self.action_count < len(userdata.order_in):
                 rospy.loginfo('ActionCount: ' + str(self.action_count + 1))
-                action_name = userdata.order_in[self.action_count][0]
-                action_data = userdata.order_in[self.action_count][1]
-                result = selectAction()
+                self.order_data = userdata.order_in
+                result = selectAction(self.order_data[action_count][0],
+                                      self.order_data[action_count][1])
                 if result is True:
+                    rospy.loginfo('Action Success')
                     return 'action_success'
                 else:
+                    rospy.loginfo('Action Failed')
                     self.action_count = 0
+                    self.order_data = []
                     return 'action_failure'
             else:
                 rospy.loginfo('All action completed')
@@ -220,7 +224,7 @@ class Exit(smach.State):
             rospy.loginfo('Executing state: EXIT')
             #coord_list = searchLocationName('entrance')
             #result = navigationAC(coord_list)
-            speak('Finsh gpsr')
+            speak('Finish gpsr')
             rospy.loginfo('Exit success')
             return 'exit'
         except rospy.ROSInterruptException:
