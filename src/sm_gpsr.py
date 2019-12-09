@@ -14,7 +14,6 @@ import rospy
 from std_msgs.msg import String, Bool
 from mimi_common_pkg.srv import ManipulateSrv
 from std_srvs.srv import Trigger
-from ti_gpsr.msg import array
 import smach_ros
 import smach
 
@@ -67,51 +66,34 @@ class ListenOrder(smach.State):
         smach.State.__init__(
                 self,
                 outcomes = ['listen_success'
-                            #'listen_failure',
-                            #'next_order'
-                            ],
+                            'listen_failure',
+                            'next_order'],
                 output_keys = ['order_out'])
         # ServiceProxy
         self.deki_srs = rospy.ServiceProxy('/service_call', Trigger)
         # Value
         self.listen_count = 1
-        self.plan_1 = [['go','desk'],['grasp','cup'],['go','operator'],['give']]
-        self.plan_2 = [['go','cupboard'],['grasp','cup'],['go','desk'],['place']]
-        self.plan_3 = [['go','shelf'],['grasp','cup'],['go','operator'],['give']]
 
     def execute(self, userdata):
         try:
             rospy.loginfo('Executing state: LISTEN_ORDER')
             speak('Please give me a order')
             result = self.deki_srs()
-            while not rospy.is_shutdown():
-                if result.message == '1':
-                    userdata.order_out = self.plan_1
-                    break
-                elif result.message == '2':
-                    userdata.order_out = self.plan_2
-                    break
-                elif result.message == '3':
-                    userdata.order_out = self.plan_3
-                    break
+            if self.listen_count <= 3:
+                if result == 'failure':
+                    rospy.loginfo('Listening Failed')
+                    self.listen_count += 1
+                    return 'listen_failure'
                 else:
-                    result = self.deki_srs()
-            return 'listen_success'
-            #if self.listen_count <= 3:
-            #    if result == 'failure':
-            #        rospy.loginfo('Listening Failed')
-            #        self.listen_count += 1
-            #        return 'listen_failure'
-            #    else:
-            #        rospy.loginfo('Listening Success')
-            #        userdata.order_out = result
-            #        result = []
-            #        self.listen_count = 1
-            #        return 'listen_success'
-            #else:
-            #    rospy.loginfo('Move to next order')
-            #    result = []
-            #    return 'next_order'
+                    rospy.loginfo('Listening Success')
+                    userdata.order_out = result
+                    result = []
+                    self.listen_count = 1
+                    return 'listen_success'
+            else:
+                rospy.loginfo('Move to next order')
+                result = []
+                return 'next_order'
         except rospy.ROSInterruptException:
             rospy.loginfo('**Interrupted**')
             pass
@@ -267,9 +249,8 @@ def main():
                 'LISTEN_ORDER',
                 ListenOrder(),
                 transitions = {'listen_success':'EXECUTE_ACTION',
-                               #'listen_failure':'LISTEN_ORDER',
-                               #'next_order':'CHECK'
-                               },
+                               'listen_failure':'LISTEN_ORDER',
+                               'next_order':'CHECK'},
                 remapping = {'order_out':'order'})
 
         # 現在位置確認とオーダーカウントを行うState
