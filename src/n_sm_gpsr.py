@@ -75,7 +75,7 @@ class ListenOrder(smach.State):
         self.deki_srs = rospy.ServiceProxy('/service_call', Trigger)
         # Value
         self.listen_count = 1
-        self.plan_1 = [['go','desk'],['grasp','cup'],['go','operator'],['give']]
+        self.plan_1 = [['go','desk'],['go','kyohey'],['go','desk']]
         self.plan_2 = [['go','cupboard'],['grasp','cup'],['go','desk'],['place']]
         self.plan_3 = [['go','shelf'],['grasp','cup'],['go','operator'],['give']]
 
@@ -83,7 +83,8 @@ class ListenOrder(smach.State):
         try:
             rospy.loginfo('Executing state: LISTEN_ORDER')
             speak('Please give me a order')
-            result = self.deki_srs()
+            #result = self.deki_srs()
+            result = '1'
             print result
             while not rospy.is_shutdown():
                 if result.message == '1':
@@ -220,7 +221,7 @@ class OrderCount(smach.State):
     def execute(self, userdata):
         try:
             rospy.loginfo('Executing state: ORDER_COUNT')
-            if self.order_count <= 3:
+            if self.order_count <= 2:
                 rospy.loginfo('Order num: ' + str(self.order_count))
                 self.order_count += 1
                 return 'not_complete'
@@ -242,12 +243,15 @@ class Move(smach.State):
                 output_keys = ['position_out'])
         #Publisher
         self.pub_location = rospy.Publisher('/navigation/move_place', String, queue_size = 1)
+        #self.pub_bgm = rospy.Publisher('/mimi_bgm/play_start', Bool, queue_size = 1)
 
     def execute(self, userdata):
         try:
             rospy.loginfo('Executing state: MOVE')
             coord_list = searchLocationName(userdata.position_in)
             self.pub_location.publish(userdata.position_in)
+            #if userdata.position_in is 'kyohey':
+            #    self.pub_bgm.publish(True)
             result = navigationAC(coord_list)
             result = 'success'
             if result == 'success':
@@ -297,11 +301,20 @@ class Manipulation(smach.State):
                     rospy.loginfo('Manipulation failed')
                     return 'mani_failure'
             else:
+                speak('Hello everyone')
+                speak('My name is happymimi')
+                speak('My owner issei borrowed 2800 yen from kyou-hey')
+                speak('And now return the borrowed money')
+                speak('Here you are')
                 self.pub_arm_req.publish(userdata.action_in)
                 self.arm_result = False
                 while not rospy.is_shutdown() and self.arm_result == False:
                     rospy.loginfo('Waiting for arm_result')
                     rospy.sleep(1.0)
+                speak('Sorry for the laate return of money')
+                speak('Well...')
+                speak('Goodbye everyone')
+                speak('And merry christmas')
                 return 'mani_success'
         except rospy.ROSInterruptException:
             rospy.loginfo('**Interrupted**')
