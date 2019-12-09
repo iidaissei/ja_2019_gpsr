@@ -52,9 +52,10 @@ class MoveToOperator(smach.State):
     def execute(self, userdata):
         try:
             rospy.loginfo('Executing state: MOVE_TO_OPERATOR')
-            #coordinate_list = searchLocationName('operator')
+            #self.coordinate_list = searchLocationName('operator')
             navigationAC(self.coordinate_list)
             speak('I arrived operator position')
+            userdata.m_position_out = 'operator'
             return 'arrived'
         except rospy.ROSInterruptException:
             rospy.loginfo('**Interrupted**')
@@ -70,7 +71,7 @@ class ListenOrder(smach.State):
                             'next_order'],
                 output_keys = ['order_out'])
         # ServiceProxy
-        self.deki_srs = rospy.ServiceProxy('/service_call', Trigger)
+        self.listen_srv = rospy.ServiceProxy('/service_call', Trigger)
         # Value
         self.listen_count = 1
 
@@ -78,7 +79,7 @@ class ListenOrder(smach.State):
         try:
             rospy.loginfo('Executing state: LISTEN_ORDER')
             speak('Please give me a order')
-            result = self.deki_srs()
+            result = self.listen_srv()
             if self.listen_count <= 3:
                 if result == 'failure':
                     rospy.loginfo('Listening Failed')
@@ -87,12 +88,11 @@ class ListenOrder(smach.State):
                 else:
                     rospy.loginfo('Listening Success')
                     userdata.order_out = result
-                    result = []
+                    #result = []
                     self.listen_count = 1
                     return 'listen_success'
             else:
                 rospy.loginfo('Move to next order')
-                result = []
                 return 'next_order'
         except rospy.ROSInterruptException:
             rospy.loginfo('**Interrupted**')
@@ -111,10 +111,10 @@ class CheckPosition(smach.State):
         try:
             rospy.loginfo('Executing state: CHECK_POSITION')
             if userdata.c_position_in == 'operator':
-                rospy.loginfo('OperatorPosition')
+                rospy.loginfo('Position OK!')
                 return 'operator'
             else:
-                rospy.loginfo('Not OperatorPosition')
+                rospy.loginfo('Not Operator')
                 return 'not_operator'
         except rospy.ROSInterruptException:
             rospy.loginfo('**Interrupted**')
@@ -133,8 +133,8 @@ class OrderCount(smach.State):
         try:
             rospy.loginfo('Executing state: ORDER_COUNT')
             if self.order_count <= 3:
-                rospy.loginfo('Order num: ' + str(self.order_count))
                 self.order_count += 1
+                rospy.loginfo('Order num: ' + str(self.order_count))
                 return 'not_complete'
             else:
                 rospy.loginfo('All order completed!')
