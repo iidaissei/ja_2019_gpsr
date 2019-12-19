@@ -52,8 +52,8 @@ class MoveToOperator(smach.State):
     def execute(self, userdata):
         try:
             rospy.loginfo('Executing state: MOVE_TO_OPERATOR')
-            #self.coordinate_list = searchLocationName('operator')
-            navigationAC(self.coordinate_list)
+            # self.coordinate_list = searchLocationName('operator')
+            # navigationAC(self.coordinate_list)
             speak('I arrived operator position')
             userdata.m_position_out = 'operator'
             return 'arrived'
