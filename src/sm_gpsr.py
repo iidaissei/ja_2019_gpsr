@@ -14,7 +14,6 @@ import rospy
 from std_msgs.msg import String, Bool
 from mimi_common_pkg.srv import ManipulateSrv
 from std_srvs.srv import Trigger
-from ti_gpsr.msg import array
 import smach_ros
 import smach
 
@@ -53,9 +52,10 @@ class MoveToOperator(smach.State):
     def execute(self, userdata):
         try:
             rospy.loginfo('Executing state: MOVE_TO_OPERATOR')
-            #coordinate_list = searchLocationName('operator')
-            navigationAC(self.coordinate_list)
+            # self.coordinate_list = searchLocationName('operator')
+            # navigationAC(self.coordinate_list)
             speak('I arrived operator position')
+            userdata.m_position_out = 'operator'
             return 'arrived'
         except rospy.ROSInterruptException:
             rospy.loginfo('**Interrupted**')
@@ -67,51 +67,33 @@ class ListenOrder(smach.State):
         smach.State.__init__(
                 self,
                 outcomes = ['listen_success'
-                            #'listen_failure',
-                            #'next_order'
-                            ],
+                            'listen_failure',
+                            'next_order'],
                 output_keys = ['order_out'])
         # ServiceProxy
-        self.deki_srs = rospy.ServiceProxy('/service_call', Trigger)
+        self.listen_srv = rospy.ServiceProxy('/service_call', Trigger)
         # Value
         self.listen_count = 1
-        self.plan_1 = [['go','desk'],['grasp','cup'],['go','operator'],['give']]
-        self.plan_2 = [['go','cupboard'],['grasp','cup'],['go','desk'],['place']]
-        self.plan_3 = [['go','shelf'],['grasp','cup'],['go','operator'],['give']]
 
     def execute(self, userdata):
         try:
             rospy.loginfo('Executing state: LISTEN_ORDER')
             speak('Please give me a order')
-            result = self.deki_srs()
-            while not rospy.is_shutdown():
-                if result.message == '1':
-                    userdata.order_out = self.plan_1
-                    break
-                elif result.message == '2':
-                    userdata.order_out = self.plan_2
-                    break
-                elif result.message == '3':
-                    userdata.order_out = self.plan_3
-                    break
+            result = self.listen_srv()
+            if self.listen_count <= 3:
+                if result == 'failure':
+                    rospy.loginfo('Listening Failed')
+                    self.listen_count += 1
+                    return 'listen_failure'
                 else:
-                    result = self.deki_srs()
-            return 'listen_success'
-            #if self.listen_count <= 3:
-            #    if result == 'failure':
-            #        rospy.loginfo('Listening Failed')
-            #        self.listen_count += 1
-            #        return 'listen_failure'
-            #    else:
-            #        rospy.loginfo('Listening Success')
-            #        userdata.order_out = result
-            #        result = []
-            #        self.listen_count = 1
-            #        return 'listen_success'
-            #else:
-            #    rospy.loginfo('Move to next order')
-            #    result = []
-            #    return 'next_order'
+                    rospy.loginfo('Listening Success')
+                    userdata.order_out = result
+                    #result = []
+                    self.listen_count = 1
+                    return 'listen_success'
+            else:
+                rospy.loginfo('Move to next order')
+                return 'next_order'
         except rospy.ROSInterruptException:
             rospy.loginfo('**Interrupted**')
             pass
@@ -129,10 +111,10 @@ class CheckPosition(smach.State):
         try:
             rospy.loginfo('Executing state: CHECK_POSITION')
             if userdata.c_position_in == 'operator':
-                rospy.loginfo('OperatorPosition')
+                rospy.loginfo('Position OK!')
                 return 'operator'
             else:
-                rospy.loginfo('Not OperatorPosition')
+                rospy.loginfo('Not Operator')
                 return 'not_operator'
         except rospy.ROSInterruptException:
             rospy.loginfo('**Interrupted**')
@@ -151,8 +133,8 @@ class OrderCount(smach.State):
         try:
             rospy.loginfo('Executing state: ORDER_COUNT')
             if self.order_count <= 3:
-                rospy.loginfo('Order num: ' + str(self.order_count))
                 self.order_count += 1
+                rospy.loginfo('Order num: ' + str(self.order_count))
                 return 'not_complete'
             else:
                 rospy.loginfo('All order completed!')
@@ -173,12 +155,12 @@ class ExecuteAction(smach.State):
                 output_keys = ['e_position_out'])
         # Service
         self.grasp_srv = rospy.ServiceProxy('/manipulation', ManipulateSrv)
-        self.place_srv = rospy.ServiceProxy()
-        self.give_srv = rospy.ServiceProxy()
+        self.arm_srv = rospy.ServiceProxy('/change_arm_pose', ManipulateSrv)
         # Publisher
         self.pub_location = rospy.Publisher('/navigation/move_place', String, queue_size = 1)
         # Value
         self.obj = ManipulateSrv()
+        self.order_data = []
         self.action_count = 0
 
     def selectAction(self, name, data):
@@ -192,10 +174,10 @@ class ExecuteAction(smach.State):
             slef.obj.target = data
             result = self.grasp_srv(self.obj.target)
         elif name is 'place':
-            result = self.place_srv()
+            result = self.place_srv('place')
         elif name is 'give':
             speak('Here you are')
-            result = self.give_srv()
+            result = self.give_srv('give')
         elif name is 'search':
             result = localizeObjectAC(data)
         elif name is 'speak':
@@ -209,13 +191,16 @@ class ExecuteAction(smach.State):
             rospy.loginfo('Executing state: EXECUTE_ACTION')
             if self.action_count < len(userdata.order_in):
                 rospy.loginfo('ActionCount: ' + str(self.action_count + 1))
-                action_name = userdata.order_in[self.action_count][0]
-                action_data = userdata.order_in[self.action_count][1]
-                result = selectAction()
+                self.order_data = userdata.order_in
+                result = selectAction(self.order_data[action_count][0],
+                                      self.order_data[action_count][1])
                 if result is True:
+                    rospy.loginfo('Action Success')
                     return 'action_success'
                 else:
+                    rospy.loginfo('Action Failed')
                     self.action_count = 0
+                    self.order_data = []
                     return 'action_failure'
             else:
                 rospy.loginfo('All action completed')
@@ -238,7 +223,7 @@ class Exit(smach.State):
             rospy.loginfo('Executing state: EXIT')
             #coord_list = searchLocationName('entrance')
             #result = navigationAC(coord_list)
-            speak('Finsh gpsr')
+            speak('Finish gpsr')
             rospy.loginfo('Exit success')
             return 'exit'
         except rospy.ROSInterruptException:
@@ -267,9 +252,8 @@ def main():
                 'LISTEN_ORDER',
                 ListenOrder(),
                 transitions = {'listen_success':'EXECUTE_ACTION',
-                               #'listen_failure':'LISTEN_ORDER',
-                               #'next_order':'CHECK'
-                               },
+                               'listen_failure':'LISTEN_ORDER',
+                               'next_order':'CHECK'},
                 remapping = {'order_out':'order'})
 
         # 現在位置確認とオーダーカウントを行うState
