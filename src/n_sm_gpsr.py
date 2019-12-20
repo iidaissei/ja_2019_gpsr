@@ -75,7 +75,7 @@ class ListenOrder(smach.State):
         self.deki_srs = rospy.ServiceProxy('/service_call', Trigger)
         # Value
         self.listen_count = 1
-        self.plan_1 = [['go','desk'],['go','kyohey'],['go','desk']]
+        self.plan_1 = [['go','desk'],['grasp','cup'],['go','kyohey'],['give'],['go','desk']]
         self.plan_2 = [['go','cupboard'],['grasp','cup'],['go','desk'],['place']]
         self.plan_3 = [['go','shelf'],['grasp','cup'],['go','operator'],['give']]
 
@@ -87,15 +87,15 @@ class ListenOrder(smach.State):
             result = '1'
             print result
             while not rospy.is_shutdown():
-                if result.message == '1':
+                if result == '1':
                     userdata.order_num_out = 1
                     userdata.order_out = self.plan_1
                     break
-                elif result.message == '2':
+                elif result == '2':
                     userdata.order_num_out =2 
                     userdata.order_out = self.plan_2
                     break
-                elif result.message == '3':
+                elif result == '3':
                     userdata.order_num_out =3 
                     userdata.order_out = self.plan_3
                     break
@@ -250,10 +250,9 @@ class Move(smach.State):
             rospy.loginfo('Executing state: MOVE')
             coord_list = searchLocationName(userdata.position_in)
             self.pub_location.publish(userdata.position_in)
-            #if userdata.position_in is 'kyohey':
-            #    self.pub_bgm.publish(True)
+            if userdata.position_in is 'kyohey':
+                self.pub_bgm.publish(True)
             result = navigationAC(coord_list)
-            result = 'success'
             if result == 'success':
                 rospy.loginfo('Navigation success')
                 userdata.position_out = userdata.position_in
@@ -394,7 +393,7 @@ def main():
         smach.StateMachine.add(
                 'ADMISSION',
                 Admission(),
-                transitions = {'finish_admissiion':'CHECK'})
+                transitions = {'finish_admissiion':'LISTEN_ORDER'})
 
         smach.StateMachine.add(
                 'MOVE_TO_OPERATOR',
