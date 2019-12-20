@@ -155,14 +155,13 @@ class ExecuteAction(smach.State):
                 output_keys = ['e_position_out'])
         # Service
         self.grasp_srv = rospy.ServiceProxy('/manipulation', ManipulateSrv)
-        self.place_srv = rospy.ServiceProxy()
-        self.give_srv = rospy.ServiceProxy()
+        self.arm_srv = rospy.ServiceProxy('/change_arm_pose', ManipulateSrv)
         # Publisher
         self.pub_location = rospy.Publisher('/navigation/move_place', String, queue_size = 1)
         # Value
         self.obj = ManipulateSrv()
-        self.action_count = 0
         self.order_data = []
+        self.action_count = 0
 
     def selectAction(self, name, data):
         rospy.loginfo('Execute action: ' + name)
@@ -175,10 +174,10 @@ class ExecuteAction(smach.State):
             slef.obj.target = data
             result = self.grasp_srv(self.obj.target)
         elif name is 'place':
-            result = self.place_srv()
+            result = self.place_srv('place')
         elif name is 'give':
             speak('Here you are')
-            result = self.give_srv()
+            result = self.give_srv('give')
         elif name is 'search':
             result = localizeObjectAC(data)
         elif name is 'speak':
