@@ -52,8 +52,8 @@ class MoveToOperator(smach.State):
     def execute(self, userdata):
         try:
             rospy.loginfo('Executing state: MOVE_TO_OPERATOR')
-            # self.coordinate_list = searchLocationName('operator')
-            # navigationAC(self.coordinate_list)
+             self.coordinate_list = searchLocationName('operator')
+             navigationAC(self.coordinate_list)
             speak('I arrived operator position')
             userdata.m_position_out = 'operator'
             return 'arrived'
@@ -79,7 +79,8 @@ class ListenOrder(smach.State):
         try:
             rospy.loginfo('Executing state: LISTEN_ORDER')
             speak('Please give me a order')
-            result = self.listen_srv()
+            # result = self.listen_srv()
+            result = 'success'
             if self.listen_count <= 3:
                 if result == 'failure':
                     rospy.loginfo('Listening Failed')
@@ -88,7 +89,7 @@ class ListenOrder(smach.State):
                 else:
                     rospy.loginfo('Listening Success')
                     userdata.order_out = result
-                    #result = []
+                    result = []
                     self.listen_count = 1
                     return 'listen_success'
             else:
@@ -132,7 +133,7 @@ class OrderCount(smach.State):
     def execute(self, userdata):
         try:
             rospy.loginfo('Executing state: ORDER_COUNT')
-            if self.order_count <= 3:
+            if self.order_count < 1:
                 self.order_count += 1
                 rospy.loginfo('Order num: ' + str(self.order_count))
                 return 'not_complete'
@@ -162,6 +163,8 @@ class ExecuteAction(smach.State):
         self.obj = ManipulateSrv()
         self.order_data = []
         self.action_count = 0
+        self.action = ['go','grasp','go','give']
+        self.data = ['shelf','cup','operator','none']
 
     def selectAction(self, name, data):
         rospy.loginfo('Execute action: ' + name)
@@ -189,11 +192,11 @@ class ExecuteAction(smach.State):
     def execute(self, userdata):
         try:
             rospy.loginfo('Executing state: EXECUTE_ACTION')
-            if self.action_count < len(userdata.order_in):
+            if self.action_count < len(self.action):
                 rospy.loginfo('ActionCount: ' + str(self.action_count + 1))
                 self.order_data = userdata.order_in
-                result = selectAction(self.order_data[action_count][0],
-                                      self.order_data[action_count][1])
+                result = selectAction(self.action[action_count],
+                                      self.data[action_count])
                 if result is True:
                     rospy.loginfo('Action Success')
                     return 'action_success'
