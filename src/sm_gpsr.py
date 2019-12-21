@@ -14,6 +14,7 @@ import rospy
 from std_msgs.msg import String, Bool
 from mimi_common_pkg.srv import ManipulateSrv
 from std_srvs.srv import Trigger
+from gpsr.srv import ActionPlan
 import smach_ros
 import smach
 
@@ -32,7 +33,7 @@ class Admission(smach.State):
         try:
             rospy.loginfo('Executing state: ADMISSION')
             speak('Start gpsr')
-            #enterTheRoomAC(0.8)
+            # enterTheRoomAC(0.8)
             rospy.loginfo('Admission completed!')
             return 'finish_admissiion'
         except rospy.ROSInterruptException:
@@ -52,8 +53,8 @@ class MoveToOperator(smach.State):
     def execute(self, userdata):
         try:
             rospy.loginfo('Executing state: MOVE_TO_OPERATOR')
-             self.coordinate_list = searchLocationName('operator')
-             navigationAC(self.coordinate_list)
+            self.coordinate_list = searchLocationName('operator')
+            navigationAC(self.coordinate_list)
             speak('I arrived operator position')
             userdata.m_position_out = 'operator'
             return 'arrived'
@@ -66,34 +67,35 @@ class ListenOrder(smach.State):
     def __init__(self):
         smach.State.__init__(
                 self,
-                outcomes = ['listen_success'
+                outcomes = ['listen_success',
                             'listen_failure',
                             'next_order'],
                 output_keys = ['order_out'])
         # ServiceProxy
-        self.listen_srv = rospy.ServiceProxy('/service_call', Trigger)
+        self.listen_srv = rospy.ServiceProxy('/gpsr/actionplan', ActionPlan)
         # Value
         self.listen_count = 1
+        self.result = ActionPlan()
 
     def execute(self, userdata):
         try:
             rospy.loginfo('Executing state: LISTEN_ORDER')
             speak('Please give me a order')
-            # result = self.listen_srv()
-            result = 'success'
+            self.result = self.listen_srv()
             if self.listen_count <= 3:
-                if result == 'failure':
+                if self.result.result == False:
                     rospy.loginfo('Listening Failed')
                     self.listen_count += 1
                     return 'listen_failure'
-                else:
+                elif self.result.result == True:
                     rospy.loginfo('Listening Success')
-                    userdata.order_out = result
-                    result = []
+                    userdata.order_out = self.result
+                    self.result = []
                     self.listen_count = 1
                     return 'listen_success'
             else:
                 rospy.loginfo('Move to next order')
+                self.listen_count = 1
                 return 'next_order'
         except rospy.ROSInterruptException:
             rospy.loginfo('**Interrupted**')
@@ -133,7 +135,7 @@ class OrderCount(smach.State):
     def execute(self, userdata):
         try:
             rospy.loginfo('Executing state: ORDER_COUNT')
-            if self.order_count < 1:
+            if self.order_count < 3:
                 self.order_count += 1
                 rospy.loginfo('Order num: ' + str(self.order_count))
                 return 'not_complete'
@@ -163,45 +165,52 @@ class ExecuteAction(smach.State):
         self.obj = ManipulateSrv()
         self.order_data = []
         self.action_count = 0
-        self.action = ['go','grasp','go','give']
-        self.data = ['shelf','cup','operator','none']
+        self.position = 'none'
 
     def selectAction(self, name, data):
         rospy.loginfo('Execute action: ' + name)
-        if name is 'go':
-            userdata.e_data_out = data
+        print type(name)
+        if name == 'go':
+            print data
+            self.position = data
             coord_list = searchLocationName(data)
-            self.pub_location = rospy.Publisher(data)
+            self.pub_location.publish(data)
             result = navigationAC(coord_list)
-        elif name is 'grasp':
-            slef.obj.target = data
-            result = self.grasp_srv(self.obj.target)
-        elif name is 'place':
-            result = self.place_srv('place')
-        elif name is 'give':
+        elif name == 'grasp':
+            self.obj.target = data
+            #result = self.grasp_srv(self.obj.target).result
+            result = self.grasp_srv('cup').result
+        elif name == 'place':
+            result = self.arm_srv('place').result
+        elif name == 'give':
             speak('Here you are')
-            result = self.give_srv('give')
-        elif name is 'search':
+            result = self.arm_srv('give').result
+        elif name == 'search':
             result = localizeObjectAC(data)
-        elif name is 'speak':
+        elif name == 'speak':
             speak(data)
             result = True
-        rospy.loginfo('Action result: ' + str(result))
+        #rospy.loginfo('Action result: ' + str(result))
+        print 'fuck'
         return result
 
     def execute(self, userdata):
         try:
             rospy.loginfo('Executing state: EXECUTE_ACTION')
-            if self.action_count < len(self.action):
+            self.order_data = userdata.order_in
+            if self.action_count < len(userdata.order_in.action):
                 rospy.loginfo('ActionCount: ' + str(self.action_count + 1))
-                self.order_data = userdata.order_in
-                result = selectAction(self.action[action_count],
-                                      self.data[action_count])
-                if result is True:
+                result = self.selectAction(self.order_data.action[self.action_count],
+                                           self.order_data.data[self.action_count])
+                if result == True:
                     rospy.loginfo('Action Success')
+                    userdata.e_position_out = self.position
+                    self.action_count += 1
                     return 'action_success'
-                else:
+                elif result == False:
                     rospy.loginfo('Action Failed')
+                    speak('Action failed')
+                    speak('Sorry, I suspend this order')
                     self.action_count = 0
                     self.order_data = []
                     return 'action_failure'
@@ -224,8 +233,8 @@ class Exit(smach.State):
     def execute(self, userdata):
         try:
             rospy.loginfo('Executing state: EXIT')
-            #coord_list = searchLocationName('entrance')
-            #result = navigationAC(coord_list)
+            # coord_list = searchLocationName('entrance')
+            # result = navigationAC(coord_list)
             speak('Finish gpsr')
             rospy.loginfo('Exit success')
             return 'exit'
