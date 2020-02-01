@@ -48,7 +48,7 @@ class MoveToOperator(smach.State):
                 outcomes = ['arrived'],
                 output_keys = ['m_position_out'])
         # Value
-        self.coordinate_list = searchLocationName('operator')
+        self.coordinate_list = searchLocationName('location_dict', 'operator')
 
     def execute(self, userdata):
         try:
@@ -126,10 +126,9 @@ class CheckPosition(smach.State):
 
 class OrderCount(smach.State):
     def __init__(self):
-        smach.State.__init__(
-                self,
-                outcomes = ['not_complete',
-                            'all_order_complete'])
+        smach.State.__init__(self,
+                             outcomes = ['not_complete',
+                                         'all_order_complete'])
         self.order_count = 0
 
     def execute(self, userdata):
@@ -173,13 +172,15 @@ class ExecuteAction(smach.State):
         if name == 'go':
             print data
             self.position = data
-            coord_list = searchLocationName(data)
+            coord_list = searchLocationName('location_dict', data)
             self.pub_location.publish(data)
             result = navigationAC(coord_list)
         elif name == 'grasp':
             self.obj.target = data
+            if data in self.object_list:
+                obj = self.object_list[data]
             #result = self.grasp_srv(self.obj.target).result
-            result = self.grasp_srv('cup').result
+            result = self.grasp_srv(obj).result
         elif name == 'place':
             result = self.arm_srv('place').result
         elif name == 'give':
@@ -190,8 +191,7 @@ class ExecuteAction(smach.State):
         elif name == 'speak':
             speak(data)
             result = True
-        #rospy.loginfo('Action result: ' + str(result))
-        print 'fuck'
+        rospy.loginfo('Action result: ' + str(result))
         return result
 
     def execute(self, userdata):
@@ -233,7 +233,7 @@ class Exit(smach.State):
     def execute(self, userdata):
         try:
             rospy.loginfo('Executing state: EXIT')
-            # coord_list = searchLocationName('entrance')
+            # coord_list = searchLocationName('location_dict', 'entrance')
             # result = navigationAC(coord_list)
             speak('Finish gpsr')
             rospy.loginfo('Exit success')
@@ -247,6 +247,7 @@ def main():
     sm_top = smach.StateMachine(
             outcomes = ['finish_gpsr'])
     sm_top.userdata.position = 'none'
+    hbngnbhmn
     with sm_top:
 
         smach.StateMachine.add(
