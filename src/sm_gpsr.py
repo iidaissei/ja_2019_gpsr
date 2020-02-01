@@ -200,33 +200,29 @@ class ExecuteAction(smach.State):
         return result
 
     def execute(self, userdata):
-        try:
-            rospy.loginfo('Executing state: EXECUTE_ACTION')
-            self.order_data = userdata.order_in
-            if self.action_count < len(userdata.order_in.action):
-                rospy.loginfo('ActionCount: ' + str(self.action_count + 1))
-                result = self.selectAction(self.order_data.action[self.action_count],
-                                           self.order_data.data[self.action_count])
-                if result == True:
-                    rospy.loginfo('Action Success')
-                    userdata.e_position_out = self.position
-                    self.action_count += 1
-                    return 'action_success'
-                elif result == False:
-                    rospy.loginfo('Action Failed')
-                    speak('Action failed')
-                    speak('Sorry, I suspend this order')
-                    self.action_count = 0
-                    self.order_data = []
-                    return 'action_failure'
-            else:
-                rospy.loginfo('All action completed')
+        rospy.loginfo('Executing state: EXECUTE_ACTION')
+        self.order_data = userdata.order_in
+        if self.action_count < len(userdata.order_in.action):
+            rospy.loginfo('ActionCount: ' + str(self.action_count + 1))
+            result = self.selectAction(self.order_data.action[self.action_count],
+                                       self.order_data.data[self.action_count])
+            if result == True:
+                rospy.loginfo('Action Success')
+                userdata.e_position_out = self.position
+                self.action_count += 1
+                return 'action_success'
+            elif result == False:
+                rospy.loginfo('Action Failed')
+                speak('Action failed')
+                speak('Sorry, I suspend this order')
                 self.action_count = 0
                 self.order_data = []
-                return 'action_complete'
-        except rospy.ROSInterruptException:
-            rospy.loginfo('**Interrupted**')
-            pass
+                return 'action_failure'
+        else:
+            rospy.loginfo('All action completed')
+            self.action_count = 0
+            self.order_data = []
+            return 'action_complete'
 
 
 class Exit(smach.State):
