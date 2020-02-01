@@ -48,13 +48,13 @@ class MoveToOperator(smach.State):
                 outcomes = ['arrived'],
                 output_keys = ['m_position_out'])
         # Value
-        self.coordinate_list = searchLocationName('location_dict', 'operator')
+        # self.coordinate_list = searchLocationName('location_dict', 'operator')
 
     def execute(self, userdata):
         try:
             rospy.loginfo('Executing state: MOVE_TO_OPERATOR')
-            self.coordinate_list = searchLocationName('operator')
-            navigationAC(self.coordinate_list)
+            # self.coordinate_list = searchLocationName('operator')
+            # navigationAC(self.coordinate_list)
             speak('I arrived operator position')
             userdata.m_position_out = 'operator'
             return 'arrived'
@@ -168,18 +168,18 @@ class ExecuteAction(smach.State):
 
     def selectAction(self, name, data):
         rospy.loginfo('Execute action: ' + name)
-        print type(name)
         if name == 'go':
-            print data
             self.position = data
-            coord_list = searchLocationName('location_dict', data)
-            self.pub_location.publish(data)
-            result = navigationAC(coord_list)
+            # coord_list = searchLocationName('location_dict', data)
+            # self.pub_location.publish(data)
+            # result = navigationAC(coord_list)
+            result = True
+            pass
         elif name == 'grasp':
             self.obj.target = data
             if data in self.object_list:
                 obj = self.object_list[data]
-            #result = self.grasp_srv(self.obj.target).result
+                print obj
             result = self.grasp_srv(obj).result
         elif name == 'place':
             result = self.arm_srv('place').result
