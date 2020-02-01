@@ -165,6 +165,8 @@ class ExecuteAction(smach.State):
         self.order_data = []
         self.action_count = 0
         self.position = 'none'
+        self.object_list = {'cup noodles':'cup',
+                            'chip star':'bottle'}
 
     def selectAction(self, name, data):
         rospy.loginfo('Execute action: ' + name)
@@ -176,11 +178,14 @@ class ExecuteAction(smach.State):
             result = True
             pass
         elif name == 'grasp':
-            self.obj.target = data
             if data in self.object_list:
                 obj = self.object_list[data]
                 print obj
-            result = self.grasp_srv(obj).result
+                print 'good'
+            else:
+                print 'nonono'
+            # result = self.grasp_srv(obj).result
+            result = True
         elif name == 'place':
             result = self.arm_srv('place').result
         elif name == 'give':
@@ -247,7 +252,6 @@ def main():
     sm_top = smach.StateMachine(
             outcomes = ['finish_gpsr'])
     sm_top.userdata.position = 'none'
-    hbngnbhmn
     with sm_top:
 
         smach.StateMachine.add(
