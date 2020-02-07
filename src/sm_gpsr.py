@@ -25,52 +25,40 @@ from common_function import *
 
 class Admission(smach.State):
     def __init__(self):
-        smach.State.__init__(
-                self,
-                outcomes = ['finish_admissiion'])
+        smach.State.__init__(self, outcomes = ['finish_admissiion'])
 
     def execute(self, userdata):
-        try:
-            rospy.loginfo('Executing state: ADMISSION')
-            speak('Start gpsr')
-            # enterTheRoomAC(0.8)
-            rospy.loginfo('Admission completed!')
-            return 'finish_admissiion'
-        except rospy.ROSInterruptException:
-            rospy.loginfo('**Interrupted**')
-            pass
+        rospy.loginfo('Executing state: ADMISSION')
+        speak('Start gpsr')
+        # enterTheRoomAC(0.8)
+        rospy.loginfo('Admission completed!')
+        return 'finish_admissiion'
 
 
 class MoveToOperator(smach.State):
     def __init__(self):
-        smach.State.__init__(
-                self,
-                outcomes = ['arrived'],
-                output_keys = ['m_position_out'])
+        smach.State.__init__(self,
+                             outcomes = ['arrived'],
+                             output_keys = ['m_position_out'])
         # Value
         # self.coordinate_list = searchLocationName('location_dict', 'operator')
 
     def execute(self, userdata):
-        try:
-            rospy.loginfo('Executing state: MOVE_TO_OPERATOR')
-            # self.coordinate_list = searchLocationName('operator')
-            # navigationAC(self.coordinate_list)
-            speak('I arrived operator position')
-            userdata.m_position_out = 'operator'
-            return 'arrived'
-        except rospy.ROSInterruptException:
-            rospy.loginfo('**Interrupted**')
-            pass
+        rospy.loginfo('Executing state: MOVE_TO_OPERATOR')
+        # self.coordinate_list = searchLocationName('operator')
+        # navigationAC(self.coordinate_list)
+        speak('I arrived operator position')
+        userdata.m_position_out = 'operator'
+        return 'arrived'
 
 
 class ListenOrder(smach.State):
     def __init__(self):
-        smach.State.__init__(
-                self,
-                outcomes = ['listen_success',
-                            'listen_failure',
-                            'next_order'],
-                output_keys = ['order_out'])
+        smach.State.__init__(self,
+                             outcomes = ['listen_success',
+                                         'listen_failure',
+                                         'next_order'],
+                             output_keys = ['order_out'])
         # ServiceProxy
         self.listen_srv = rospy.ServiceProxy('/gpsr/actionplan', ActionPlan)
         # Value
@@ -78,50 +66,41 @@ class ListenOrder(smach.State):
         self.result = ActionPlan()
 
     def execute(self, userdata):
-        try:
-            rospy.loginfo('Executing state: LISTEN_ORDER')
-            speak('Please give me a order')
-            self.result = self.listen_srv()
-            if self.listen_count <= 3:
-                if self.result.result == False:
-                    rospy.loginfo('Listening Failed')
-                    self.listen_count += 1
-                    return 'listen_failure'
-                elif self.result.result == True:
-                    rospy.loginfo('Listening Success')
-                    userdata.order_out = self.result
-                    self.result = []
-                    self.listen_count = 1
-                    return 'listen_success'
-            else:
-                rospy.loginfo('Move to next order')
+        rospy.loginfo('Executing state: LISTEN_ORDER')
+        speak('Please give me a order')
+        self.result = self.listen_srv()
+        if self.listen_count <= 3:
+            if self.result.result == False:
+                rospy.loginfo('Listening Failed')
+                self.listen_count += 1
+                return 'listen_failure'
+            elif self.result.result == True:
+                rospy.loginfo('Listening Success')
+                userdata.order_out = self.result
+                self.result = []
                 self.listen_count = 1
-                return 'next_order'
-        except rospy.ROSInterruptException:
-            rospy.loginfo('**Interrupted**')
-            pass
+                return 'listen_success'
+        else:
+            rospy.loginfo('Move to next order')
+            self.listen_count = 1
+            return 'next_order'
 
 
 class CheckPosition(smach.State):
     def __init__(self):
-        smach.State.__init__(
-                self,
-                outcomes = ['operator',
-                            'not_operator'],
-                input_keys = ['c_position_in'])
+        smach.State.__init__(self,
+                             outcomes = ['operator',
+                                         'not_operator'],
+                             input_keys = ['c_position_in'])
 
     def execute(self, userdata):
-        try:
-            rospy.loginfo('Executing state: CHECK_POSITION')
-            if userdata.c_position_in == 'operator':
-                rospy.loginfo('Position OK!')
-                return 'operator'
-            else:
-                rospy.loginfo('Not Operator')
-                return 'not_operator'
-        except rospy.ROSInterruptException:
-            rospy.loginfo('**Interrupted**')
-            pass
+        rospy.loginfo('Executing state: CHECK_POSITION')
+        if userdata.c_position_in == 'operator':
+            rospy.loginfo('Position OK!')
+            return 'operator'
+        else:
+            rospy.loginfo('Not Operator')
+            return 'not_operator'
 
 
 class OrderCount(smach.State):
@@ -132,18 +111,14 @@ class OrderCount(smach.State):
         self.order_count = 0
 
     def execute(self, userdata):
-        try:
-            rospy.loginfo('Executing state: ORDER_COUNT')
-            if self.order_count < 3:
-                self.order_count += 1
-                rospy.loginfo('Order num: ' + str(self.order_count))
-                return 'not_complete'
-            else:
-                rospy.loginfo('All order completed!')
-                return 'all_order_complete'
-        except rospy.ROSInterruptException:
-            rospy.loginfo('**Interrupted**')
-            pass
+        rospy.loginfo('Executing state: ORDER_COUNT')
+        if self.order_count < 3:
+            self.order_count += 1
+            rospy.loginfo('Order num: ' + str(self.order_count))
+            return 'not_complete'
+        else:
+            rospy.loginfo('All order completed!')
+            return 'all_order_complete'
 
 
 class ExecuteAction(smach.State):
@@ -227,21 +202,14 @@ class ExecuteAction(smach.State):
 
 class Exit(smach.State):
     def __init__(self):
-        smach.State.__init__(
-                self,
-                outcomes = ['exit'])
+        smach.State.__init__(self, outcomes = ['exit'])
 
     def execute(self, userdata):
-        try:
-            rospy.loginfo('Executing state: EXIT')
-            # coord_list = searchLocationName('location_dict', 'entrance')
-            # result = navigationAC(coord_list)
-            speak('Finish gpsr')
-            rospy.loginfo('Exit success')
-            return 'exit'
-        except rospy.ROSInterruptException:
-            rospy.loginfo('**Interrupted**')
-            pass
+        rospy.loginfo('Executing state: EXIT')
+        # coord_list = searchLocationName('location_dict', 'entrance')
+        # result = navigationAC(coord_list)
+        speak('Finish gpsr')
+        return 'exit'
 
 
 def main():
