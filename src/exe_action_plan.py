@@ -11,7 +11,9 @@
 import sys
 # ROS
 import rospy
-from gpsr.srv import ActionPlan
+import rosparam
+import actionlib
+from ja_2019_gpsr.msg import *
 from std_srvs.srv import Trigger
 from  std_msgs.msg import String, Bool
 from mimi_common_pkg.srv import ManipulateSrv
@@ -20,34 +22,35 @@ from smach import StateMachine
 import smach_ros
 import smach
 
-sys.path.insert(0, '/home/issei/catkin_ws/src/mimi_common_pkg/')
-from common_action_client import *
-from common_function import speak
+sys.path.insert(0, '/home/athome/catkin_ws/src/mimi_common_pkg/scripts/')
+# from common_action_client import *
+from common_function import *
 
 
 class determineAction(smach.State):
     def __init__(self):
         smach.State.__init__(self,
                              outcomes = ['move', 'mani', 'search', 'speak', 'all_finish'],
-                             input_keys = ['goal_in', 'action_num'],
+                             input_keys = ['goal_in', 'action_number'],
                              output_keys = ['action_output', 'data_output'])
         # Value
         self.action_count = 0
         self.action_name = 'none'
         self.action_data = 'none'
         # Param
-        self.action_state = rosparam.get_param('/gpsr/action_state')
+        self.action_state = rosparam.get_param('/action_state')
 
     def execute(self, userdata):
         rospy.loginfo('Executing state: DETERMINE_ACTION')
-        self.action_count = userdata.action_num
-        self.action_name = userdata.goal_in.action[self.action_count]
-        self.action_data = userdata.goal_in.data[self.action_count]
-        if self.action_count < len(userdata.order_in.action):
+        self.action_count = userdata.action_number
+        action_plan = userdata.goal_in
+        self.action_name = action_plan.action[self.action_count]
+        self.action_data = action_plan.data[self.action_count]
+        if self.action_count < len(action_plan.action):
             userdata.action_output = self.action_name
             userdata.data_output = self.action_data
             self.action_count += 1
-            speak('Action number ' + str(self.action_count))
+            num = str(self.action_count)
             return self.action_state[self.action_name]
         else:
             speak('All action success')
@@ -67,10 +70,11 @@ class move(smach.State):
         name = userdata.action_in
         data = userdata.data_in
         if name == 'go':
-            coord_list = searchLocationName('location_dict', data)
+            # coord_list = searchLocationName('location_dict', data)
             self.pub_location.publish(data)
-            speak('I move to ' + data)
-            result = navigationAC(coord_list)
+            # speak('I move to ' + data)
+            # result = navigationAC(coord_list)
+            result = True
             if result:
                 return 'move_finish'
             else:
@@ -88,20 +92,20 @@ class mani(smach.State):
         self.grasp_srv = rospy.ServiceProxy('/manipulation', ManipulateSrv)
         self.arm_srv = rospy.ServiceProxy('/change_arm_pose', ManipulateSrv)
         # Param
-        self.object_list = rosparam.get_param('/object_list')
+        self.object_list = rosparam.get_param('/object_mapping')
  
     def execute(self, userdata):
         rospy.loginfo('Executing state: MANI')
         name = userdata.action_in
         data = userdata.data_in
         if name == 'grasp':
-            speak('I grasp ' + data)
+            # speak('I grasp ' + data)
             result = self.grasp_srv(data).result
         elif name == 'place':
-            speak('I put '+ data)
+            # speak('I put '+ data)
             result == self.arm_srv(name).result
         elif name == 'give':
-            speak('Here you are')
+            # speak('Here you are')
             result = self.arm_srv(name).result
         rospy.loginfo('Result is ' + str(result))
         if result:
@@ -146,7 +150,7 @@ def main():
                         'preempted'],
             input_keys = ['goal_message'],
             output_keys = ['result_message'])
-    userdata.action_num = 0
+    sm_top.userdata.action_num = 0
     with sm_top:
         StateMachine.add(
                 'DETERMINE_ACTION',
@@ -157,7 +161,9 @@ def main():
                                'speak':'SPEAK',
                                'all_finish':'success'},
                 remapping = {'goal_in':'goal_message',
-                             'action_output':'action_name'})
+                             'action_number':'action_num',
+                             'action_output':'action_name',
+                             'data_output':'data_name'})
 
         StateMachine.add(
                 'MOVE',

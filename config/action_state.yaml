@@ -1,0 +1,6 @@
+{'go':'move',
+ 'grasp':'mani',
+ 'place':'mani',
+ 'give':'mani',
+ 'search':'search',
+ 'speak':'speak'}

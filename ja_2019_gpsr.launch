@@ -1,0 +1,4 @@
+<launch>
+        <rosparam file="$(find ja_2019_gpsr)/config/action_state.yaml" command="load" ns="action_state" />
+        <rosparam file="$(find ja_2019_gpsr)/config/object_mapping.yaml" command="load" ns="object_mapping" />
+ 
