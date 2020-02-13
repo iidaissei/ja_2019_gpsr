@@ -41,7 +41,7 @@ class DecideMove(smach.State):
         # Subscriber
         self.posi_sub = rospy.Subscriber('/navigation/move_place', String, self.currentPosiCB)
         # Value
-        self.coord_list = searchLocationName('gpsr', 'operator')
+        # self.coord_list = searchLocationName('gpsr', 'operator')
         self.current_position = 'none'
 
     def currentPosiCB(self, data):
@@ -50,7 +50,7 @@ class DecideMove(smach.State):
     def execute(self, userdata):
         rospy.loginfo('Executing state: DECIDE_MOVE')
         if self.current_position != 'operator':
-            navigationAC(self.coord_list)
+            # navigationAC(self.coord_list)
             speak('I arrived operator position')
         else:
             pass
@@ -61,7 +61,7 @@ class ListenCommand(smach.State):
     def __init__(self):
         smach.State.__init__(self,
                              outcomes = ['listen_success',
-                                         'listen_failed',
+                                         'listen_failure',
                                          'next_cmd',
                                          'all_cmd_finish'],
                              output_keys = ['cmd_out'])
@@ -74,10 +74,11 @@ class ListenCommand(smach.State):
     def execute(self, userdata):
         rospy.loginfo('Executing state: LISTEN_COMMAND')
         if self.cmd_count == 4:
+            speak('Finish all command')
             return 'all_cmd_finish'
-        if self.listen_count <= 3:
+        elif self.listen_count <= 3:
             speak('CommandNumber is ' + str(self.cmd_count))
-            speak('ListenNumber is ' + str(self.listen_count))
+            speak('ListenCount is ' + str(self.listen_count))
             speak('Please instruct me')
             result = self.listen_srv()
             if result.result:
@@ -88,7 +89,7 @@ class ListenCommand(smach.State):
             else:
                 self.listen_count += 1
                 speak("Sorry, I could't listen")
-                return 'listen_failed'
+                return 'listen_failure'
         else:
             speak("I couldn't understand the instruction")
             self.listen_count = 1
@@ -100,7 +101,7 @@ class ExeAction(smach.State):
     def __init__(self):
         smach.State.__init__(self,
                              outcomes = ['action_success',
-                                         'action_failed'],
+                                         'action_failure'],
                              input_keys = ['cmd_in'])
 
     def execute(self, userdata):
@@ -110,21 +111,21 @@ class ExeAction(smach.State):
         print data
         print action
         # result = exeActionPlan(action, data)
-        result = False
+        result = True
         # if result.result:
         if result:
             speak('Action success')
             return 'action_success'
         else:
             speak('Action failed')
-            return 'action_faied'
+            return 'action_failure'
 
 
 class Exit(smach.State):
     def __init__(self):
         smach.State.__init__(self, outcomes = ['exit_finish'])
         # Value
-        self.coord_list = searchLocationName('gpsr', 'exit')
+        # self.coord_list = searchLocationName('gpsr', 'exit')
 
     def execute(self, userdata):
         rospy.loginfo('Executing state: EXIT')
@@ -151,7 +152,7 @@ def main():
                 ListenCommand(),
                 transitions = {'listen_success':'EXE_ACTION',
                                'listen_failure':'LISTEN_COMMAND',
-                               'next_order':'DECIDE_MOVE',
+                               'next_cmd':'DECIDE_MOVE',
                                'all_cmd_finish':'EXIT'},
                 remapping = {'cmd_out':'cmd'})
 
