@@ -58,6 +58,7 @@ class ListenOrder(smach.State):
                              outcomes = ['listen_success',
                                          'listen_failure',
                                          'next_order'],
+                             input_keys = ['order_c_in'],
                              output_keys = ['order_out'])
         # ServiceProxy
         self.listen_srv = rospy.ServiceProxy('/gpsr/actionplan', ActionPlan)
@@ -66,20 +67,30 @@ class ListenOrder(smach.State):
 
     def execute(self, userdata):
         rospy.loginfo('Executing state: LISTEN_ORDER')
-        speak('Please give me a order')
-        result = self.listen_srv()
-        if self.listen_count <= 3:
+        # speak('Please give me a order')
+        # result = self.listen_srv()
+        order_count = userdata.order_c_in
+        if order_count == 4:
+            speak('Finish all order')
+            return 'next_order'
+        elif self.listen_count <= 3:
+            speak('OrderNumber is ' + str(order_count))
+            speak('ListenNumber is ' + str(self.listen_count))
+            speak('Please give me a order')
+            result = self.listen_srv()
             if result.result:
                 rospy.loginfo('Listening Success')
-                userdata.order_out = self.result
+                userdata.order_out = result
                 self.listen_count = 1
                 return 'listen_success'
             else:
                 rospy.loginfo('Listening Failed')
+                speak("Sorry, I could't listen")
                 self.listen_count += 1
                 return 'listen_failure'
         else:
             rospy.loginfo('Move to next order')
+            speak('Move to next order')
             self.listen_count = 1
             return 'next_order'
 
@@ -105,7 +116,8 @@ class OrderCount(smach.State):
     def __init__(self):
         smach.State.__init__(self,
                              outcomes = ['not_complete',
-                                         'all_order_complete'])
+                                         'all_order_complete'],
+                             output_keys = ['order_c_out'])
         self.order_count = 0
 
     def execute(self, userdata):
@@ -113,6 +125,7 @@ class OrderCount(smach.State):
         if self.order_count < 3:
             self.order_count += 1
             rospy.loginfo('Order num: ' + str(self.order_count))
+            userdata.order_c_out = self.order_count
             return 'not_complete'
         else:
             rospy.loginfo('All order completed!')
@@ -132,8 +145,12 @@ class ExecuteAction(smach.State):
         rospy.loginfo('Executing state: EXECUTE_ACTION')
         action = userdata.order_in.action
         data = userdata.order_in.data
-        result = exeActionPlan(action, data)
-        if result.result:
+        print data
+        print action
+        # result = exeActionPlan(action, data)
+        result = False
+        # if result.result:
+        if result:
             rospy.loginfo('Action Success')
             return 'action_success'
         else:
@@ -176,7 +193,8 @@ def main():
                 transitions = {'listen_success':'EXECUTE_ACTION',
                                'listen_failure':'LISTEN_ORDER',
                                'next_order':'CHECK'},
-                remapping = {'order_out':'order'})
+                remapping = {'order_out':'order',
+                             'order_c_in':'o_count'})
 
         # 現在位置確認とオーダーカウントを行うState
         sm_check = smach.Concurrence(
@@ -185,6 +203,7 @@ def main():
                             'move'],
                 default_outcome = 'all_order_complete',
                 input_keys = ['position'],
+                output_keys = ['o_count'],
                 outcome_map = {'stay':
                               {'CHECK_POSITION':'operator',
                                'ORDER_COUNT':'not_complete'},
@@ -199,7 +218,8 @@ def main():
                     remapping = {'c_position_in':'position'})
             smach.Concurrence.add(
                     'ORDER_COUNT',
-                    OrderCount())
+                    OrderCount(),
+                    remapping = {'order_c_out':'o_count'})
 
         smach.StateMachine.add(
                 'CHECK',
@@ -211,7 +231,7 @@ def main():
         smach.StateMachine.add(
                 'EXECUTE_ACTION',
                 ExecuteAction(),
-                transitions = {'action_success':'EXECUTE_ACTION',
+                transitions = {'action_success':'CHECK',
                                'action_failure':'CHECK'},
                 remapping = {'order_in':'order',
                              'e_position_out':'position'})
