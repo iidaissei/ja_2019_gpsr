@@ -67,8 +67,6 @@ class ListenOrder(smach.State):
 
     def execute(self, userdata):
         rospy.loginfo('Executing state: LISTEN_ORDER')
-        # speak('Please give me a order')
-        # result = self.listen_srv()
         order_count = userdata.order_c_in
         if order_count == 4:
             speak('Finish all order')
