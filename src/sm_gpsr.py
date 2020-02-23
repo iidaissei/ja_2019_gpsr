@@ -30,8 +30,8 @@ class Enter(smach.State):
 
     def execute(self, userdata):
         rospy.loginfo('Executing state: ENTER')
-        speak('Start gpsr')
-        enterTheRoomAC(0.8)
+        speak('Start GPSR')
+        # enterTheRoomAC(0.8)
         return 'enter_finish'
 
 
@@ -43,7 +43,8 @@ class DecideMove(smach.State):
         # Subscriber
         self.posi_sub = rospy.Subscriber('/navigation/move_place', String, self.currentPosiCB)
         # Value
-        self.coord_list = searchLocationName('operator')
+        self.operator_coord = searchLocationName('operator')
+        self.exit_coord = searchLocationName('entrance')
         self.current_position = 'none'
 
     def currentPosiCB(self, data):
@@ -52,12 +53,15 @@ class DecideMove(smach.State):
     def execute(self, userdata):
         rospy.loginfo('Executing state: DECIDE_MOVE')
         print self.current_position
-        if userdata.cmd_out_in == 3:
-            speak('All command success')
+        if userdata.cmd_count_in == 4:
+            speak('Finish all command')
+            speak('Move to exit')
+            navigationAC(self.exit_coord)
+            speak('Finish GPSR')
             return 'all_cmd_finish'
         elif self.current_position != 'operator':
-            navigationAC(self.coord_list)
-            speak('I arrived operator position')
+            navigationAC(self.operator_coord)
+            speak('I arrived operator')
             return 'decide_finish'
         else:
             return 'decide_finish'
@@ -69,25 +73,27 @@ class ListenCommand(smach.State):
                              outcomes = ['listen_success',
                                          'listen_failure',
                                          'next_cmd'],
-                             output_keys = ['cmd_out', 'cmd_count_out'])
+                             input_keys = ['cmd_count_in'],
+                             output_keys = ['cmd_out',
+                                            'cmd_count_out'])
         # ServiceProxy
         self.listen_srv = rospy.ServiceProxy('/gpsr/actionplan', ActionPlan)
         # Value
         self.listen_count = 1
-        self.cmd_count = 1
 
     def execute(self, userdata):
         rospy.loginfo('Executing state: LISTEN_COMMAND')
+        cmd_count = userdata.cmd_count_in
         if self.listen_count <= 3:
-            speak('CommandNumber is ' + str(self.cmd_count))
+            speak('CommandNumber is ' + str(cmd_count))
             speak('ListenCount is ' + str(self.listen_count))
             speak('Please instruct me')
             result = self.listen_srv()
             if result.result:
                 self.listen_count = 1
-                self.cmd_count += 1
+                cmd_count += 1
                 userdata.cmd_out = result
-                userdata.cmd_count_out = self.cmd_count
+                userdata.cmd_count_out = cmd_count
                 return 'listen_success'
             else:
                 self.listen_count += 1
@@ -96,8 +102,8 @@ class ListenCommand(smach.State):
         else:
             speak("I couldn't understand the instruction")
             self.listen_count = 1
-            self.cmd_count +=1
-            userdata.cmd_count_out = self.cmd_count
+            cmd_count +=1
+            userdata.cmd_count_out = cmd_count
             return 'next_cmd'
 
 
@@ -115,8 +121,7 @@ class ExeAction(smach.State):
         print data
         print action
         result = exeActionPlanAC(action, data)
-        print result 
-        if result:
+        if result == True:
             speak('Action success')
             return 'action_success'
         else:
@@ -124,32 +129,20 @@ class ExeAction(smach.State):
             return 'action_failure'
 
 
-class Exit(smach.State):
-    def __init__(self):
-        smach.State.__init__(self, outcomes = ['exit_finish'])
-        # Value
-        self.coord_list = searchLocationName('entrance')
-
-    def execute(self, userdata):
-        rospy.loginfo('Executing state: EXIT')
-        result = navigationAC(self.coord_list)
-        speak('Finish GPSR')
-        return 'exit_finish'
-
-
 def main():
     sm_top = smach.StateMachine(outcomes = ['finish_sm_top'])
+    sm_top.userdata.cmd_count = 1
     with sm_top:
         smach.StateMachine.add(
                 'ENTER',
                 Enter(),
-                transitions = {'enter_finish':'DECIDE_MOVE',
-                               'all_cmd_finish':'EXIT'})
+                transitions = {'enter_finish':'DECIDE_MOVE'})
 
         smach.StateMachine.add(
                 'DECIDE_MOVE',
                 DecideMove(),
-                transitions = {'decide_finish':'LISTEN_COMMAND'},
+                transitions = {'decide_finish':'LISTEN_COMMAND',
+                               'all_cmd_finish':'finish_sm_top'},
                 remapping = {'cmd_count_in':'cmd_count'})
 
         smach.StateMachine.add(
@@ -159,6 +152,7 @@ def main():
                                'listen_failure':'LISTEN_COMMAND',
                                'next_cmd':'DECIDE_MOVE'},
                 remapping = {'cmd_out':'cmd',
+                             'cmd_count_in':'cmd_count',
                              'cmd_count_out':'cmd_count'})
 
         smach.StateMachine.add(
@@ -167,11 +161,6 @@ def main():
                 transitions = {'action_success':'DECIDE_MOVE',
                                'action_failure':'DECIDE_MOVE'},
                 remapping = {'cmd_in':'cmd'})
-
-        smach.StateMachine.add(
-                'EXIT',
-                Exit(),
-                transitions = {'exit_finish':'finish_sm_top'})
 
     outcome = sm_top.execute()
 
