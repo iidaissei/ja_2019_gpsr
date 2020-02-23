@@ -37,7 +37,9 @@ class Enter(smach.State):
 
 class DecideMove(smach.State):
     def __init__(self):
-        smach.State.__init__(self, outcomes = ['decide_finish'])
+        smach.State.__init__(self,
+                             outcomes = ['decide_finish', 'all_cmd_finish'],
+                             input_keys = ['cmd_count_in'])
         # Subscriber
         self.posi_sub = rospy.Subscriber('/navigation/move_place', String, self.currentPosiCB)
         # Value
@@ -50,12 +52,15 @@ class DecideMove(smach.State):
     def execute(self, userdata):
         rospy.loginfo('Executing state: DECIDE_MOVE')
         print self.current_position
-        if self.current_position != 'operator':
+        if userdata.cmd_out_in == 3:
+            speak('All command success')
+            return 'all_cmd_finish'
+        elif self.current_position != 'operator':
             navigationAC(self.coord_list)
             speak('I arrived operator position')
+            return 'decide_finish'
         else:
-            pass
-        return 'decide_finish'
+            return 'decide_finish'
 
 
 class ListenCommand(smach.State):
@@ -63,9 +68,8 @@ class ListenCommand(smach.State):
         smach.State.__init__(self,
                              outcomes = ['listen_success',
                                          'listen_failure',
-                                         'next_cmd',
-                                         'all_cmd_finish'],
-                             output_keys = ['cmd_out'])
+                                         'next_cmd'],
+                             output_keys = ['cmd_out', 'cmd_count_out'])
         # ServiceProxy
         self.listen_srv = rospy.ServiceProxy('/gpsr/actionplan', ActionPlan)
         # Value
@@ -74,10 +78,7 @@ class ListenCommand(smach.State):
 
     def execute(self, userdata):
         rospy.loginfo('Executing state: LISTEN_COMMAND')
-        if self.cmd_count == 4:
-            speak('Finish all command')
-            return 'all_cmd_finish'
-        elif self.listen_count <= 3:
+        if self.listen_count <= 3:
             speak('CommandNumber is ' + str(self.cmd_count))
             speak('ListenCount is ' + str(self.listen_count))
             speak('Please instruct me')
@@ -86,6 +87,7 @@ class ListenCommand(smach.State):
                 self.listen_count = 1
                 self.cmd_count += 1
                 userdata.cmd_out = result
+                userdata.cmd_count_out = self.cmd_count
                 return 'listen_success'
             else:
                 self.listen_count += 1
@@ -95,6 +97,7 @@ class ListenCommand(smach.State):
             speak("I couldn't understand the instruction")
             self.listen_count = 1
             self.cmd_count +=1
+            userdata.cmd_count_out = self.cmd_count
             return 'next_cmd'
 
 
@@ -140,21 +143,23 @@ def main():
         smach.StateMachine.add(
                 'ENTER',
                 Enter(),
-                transitions = {'enter_finish':'DECIDE_MOVE'})
+                transitions = {'enter_finish':'DECIDE_MOVE',
+                               'all_cmd_finish':'EXIT'})
 
         smach.StateMachine.add(
                 'DECIDE_MOVE',
                 DecideMove(),
-                transitions = {'decide_finish':'LISTEN_COMMAND'})
+                transitions = {'decide_finish':'LISTEN_COMMAND'},
+                remapping = {'cmd_count_in':'cmd_count'})
 
         smach.StateMachine.add(
                 'LISTEN_COMMAND',
                 ListenCommand(),
                 transitions = {'listen_success':'EXE_ACTION',
                                'listen_failure':'LISTEN_COMMAND',
-                               'next_cmd':'DECIDE_MOVE',
-                               'all_cmd_finish':'EXIT'},
-                remapping = {'cmd_out':'cmd'})
+                               'next_cmd':'DECIDE_MOVE'},
+                remapping = {'cmd_out':'cmd',
+                             'cmd_count_out':'cmd_count'})
 
         smach.StateMachine.add(
                 'EXE_ACTION',
