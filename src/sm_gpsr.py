@@ -31,7 +31,7 @@ class Enter(smach.State):
     def execute(self, userdata):
         rospy.loginfo('Executing state: ENTER')
         speak('Start gpsr')
-        # enterTheRoomAC(0.8)
+        enterTheRoomAC(0.8)
         return 'enter_finish'
 
 
@@ -112,6 +112,7 @@ class ExeAction(smach.State):
         print data
         print action
         result = exeActionPlanAC(action, data)
+        print result 
         if result:
             speak('Action success')
             return 'action_success'
