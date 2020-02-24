@@ -18,6 +18,7 @@ from std_msgs.msg import String
 from std_srvs.srv import Trigger
 from gpsr.srv import ActionPlan
 from mimi_common_pkg.srv import ManipulateSrv
+from ggi.srv import YesNo
 
 sys.path.insert(0, '/home/athome/catkin_ws/src/mimi_common_pkg/scripts/')
 from common_action_client import *
@@ -52,7 +53,6 @@ class DecideMove(smach.State):
 
     def execute(self, userdata):
         rospy.loginfo('Executing state: DECIDE_MOVE')
-        print self.current_position
         if userdata.cmd_count_in == 4:
             speak('Finish all command')
             speak('Move to exit')
@@ -61,7 +61,7 @@ class DecideMove(smach.State):
             return 'all_cmd_finish'
         elif self.current_position != 'operator':
             navigationAC(self.operator_coord)
-            speak('I arrived operator')
+            # speak('I arrived operator')
             return 'decide_finish'
         else:
             return 'decide_finish'
@@ -78,6 +78,7 @@ class ListenCommand(smach.State):
                                             'cmd_count_out'])
         # ServiceProxy
         self.listen_srv = rospy.ServiceProxy('/gpsr/actionplan', ActionPlan)
+        self.yesno_srv = rospy.ServiceProxy('/yes_no', YesNo)
         # Value
         self.listen_count = 1
 
@@ -90,14 +91,21 @@ class ListenCommand(smach.State):
             speak('Please instruct me')
             result = self.listen_srv()
             if result.result:
-                self.listen_count = 1
-                cmd_count += 1
-                userdata.cmd_out = result
-                userdata.cmd_count_out = cmd_count
-                return 'listen_success'
+                speak('Is this correct?')
+                answer = self.yesno_srv().result
+                if answer:
+                    self.listen_count = 1
+                    cmd_count += 1
+                    userdata.cmd_out = result
+                    userdata.cmd_count_out = cmd_count
+                    return 'listen_success'
+                else:
+                    speak('Sorry')
+                    self.listen_count += 1
+                    return 'listen_failure'
             else:
                 self.listen_count += 1
-                speak("Sorry, I could't listen")
+                speak("I could't listen")
                 return 'listen_failure'
         else:
             speak("I couldn't understand the instruction")
@@ -121,11 +129,9 @@ class ExeAction(smach.State):
         print data
         print action
         result = exeActionPlanAC(action, data)
-        if result == True:
-            speak('Action success')
+        if result:
             return 'action_success'
         else:
-            speak('Action failed')
             return 'action_failure'
 
 

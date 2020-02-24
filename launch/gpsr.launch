@@ -1,4 +1,4 @@
 <launch>
     <rosparam file="$(find mimi_common_pkg)/config/demo.yaml" command="load" ns="/location_dict" />
-    <node pkg="ja_2019_gpsr" name="sm_gpsr" type="sm_gpsr.py" />
+    <node pkg="ja_2019_gpsr" name="sm_gpsr" type="sm_gpsr.py" output="screen"/>
 </launch>
